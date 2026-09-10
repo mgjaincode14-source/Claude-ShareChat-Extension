@@ -203,5 +203,62 @@ Tested against sample token: \`eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\` -> Safe
       ]
     },
     'claude_zip'
+  ),
+
+  parseClaudeConversationObject(
+    {
+      uuid: 'conv_791d8870-1931-45eb-a7b7-3110f50c4940',
+      name: 'Claude Selective Sharing Architecture & Strategy',
+      created_at: '2026-08-23T10:00:00Z',
+      updated_at: '2026-08-27T18:30:00Z',
+      model: 'Claude 3.5 Sonnet',
+      chat_messages: [
+        {
+          uuid: 'msg_791d_1',
+          sender: 'human',
+          created_at: '2026-08-23T10:00:00Z',
+          text: 'How can we build a Claude conversation selective sharing tool that allows users to export specific dates, date ranges, and individual messages?'
+        },
+        {
+          uuid: 'msg_791d_2',
+          sender: 'assistant',
+          created_at: '2026-08-23T10:02:15Z',
+          text: `Building a **Claude Selective Sharing Tool** requires a modular 6-phase architecture:
+
+### Key Feature Pillars
+
+1. **Phase 1: Ingestion & Core Model**: Parse Claude Zip exports, shared URLs, raw text, and live DOM nodes into a standard \`UnifiedConversation\` data format.
+2. **Phase 2: Selective Slicing Engine**:
+   - Filter by **Entire Conversation**.
+   - Filter by **Specific Date** (e.g. \`2026-08-23\` vs \`2026-08-27\`).
+   - Filter by **Date Range** (\`2026-08-23\` to \`2026-08-27\`).
+   - Filter by **Individual Messages** with context auto-linking.
+3. **Phase 4: Privacy & Redaction**: Detect API keys, JWTs, emails, and credentials with interactive click-to-redact.
+4. **Phase 6: Browser Extension**: Chrome Manifest V3 extension running directly on \`claude.ai\` for 1-click native ingestion!`
+        },
+        {
+          uuid: 'msg_791d_3',
+          sender: 'human',
+          created_at: '2026-08-27T18:00:00Z',
+          text: 'What happens when Cloudflare protects shared URLs against automated server requests?'
+        },
+        {
+          uuid: 'msg_791d_4',
+          sender: 'assistant',
+          created_at: '2026-08-27T18:30:00Z',
+          text: `When Cloudflare protects \`claude.ai/share/...\` against automated server scrapers:
+
+1. **Web App Level**: We use a 1-click **Browser Import Bridge** that runs inside the user's browser where Cloudflare has already granted clearance.
+2. **Extension Level**: The Manifest V3 extension runs natively inside the \`claude.ai\` tab with full access to the DOM and state!
+
+\`\`\`typescript
+export function sliceConversationByDate(messages: UnifiedMessage[], targetDate: string) {
+  return messages.filter(m => m.dateString === targetDate);
+}
+\`\`\``
+        }
+      ]
+    },
+    'claude_share_link'
   )
 ];
