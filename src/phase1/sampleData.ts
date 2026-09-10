@@ -77,13 +77,14 @@ export default async function DashboardPage({ params }: { params: { tenantId: st
           created_at: '2026-08-23T11:45:00Z',
           text: `When executing server actions or API routes, environment variables must remain strictly server-side.
 
-Never prefix secrets with \`NEXT_PUBLIC_\`.
+Never prefix secrets with `NEXT_PUBLIC_`.
 
-\`\`\`env
+```env
 # .env.local - SERVER ONLY (Secure)
-ANTHROPIC_API_KEY=sk-ant-api03-samplekey982347293847293847923847
-DATABASE_URL=postgresql://admin:secretpass123@db.internal:5432/appdb
-\`\`\`
+# Example placeholders — do NOT commit real secrets
+ANTHROPIC_API_KEY=[REDACTED_ANTHROPIC_API_KEY]
+DATABASE_URL=postgresql://user:password@db.internal:5432/appdb
+```
 
 Here is a secure server action example:
 
