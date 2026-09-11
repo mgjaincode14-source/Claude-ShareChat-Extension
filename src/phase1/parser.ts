@@ -3,8 +3,24 @@ import { UnifiedConversation, UnifiedMessage, ImportResult, FileAttachment } fro
 
 function formatDateISO(dateInput: string | Date | undefined): { iso: string; dateStr: string; timeStr: string } {
   try {
-    const d = dateInput ? new Date(dateInput) : new Date();
+    if (!dateInput) throw new Error('Empty date');
+    let d = new Date(dateInput);
+
+    // If parsing failed, check if it's a short date string like "Aug 19" or "Aug 19, 7:50 PM"
+    if (isNaN(d.getTime()) && typeof dateInput === 'string') {
+      const cleaned = dateInput.trim();
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthMatch = cleaned.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})/i);
+      if (monthMatch) {
+        const month = monthMatch[1];
+        const day = monthMatch[2];
+        const year = new Date().getFullYear();
+        d = new Date(`${month} ${day}, ${year}`);
+      }
+    }
+
     if (isNaN(d.getTime())) throw new Error('Invalid date');
+
     const iso = d.toISOString();
     const dateStr = iso.split('T')[0];
     const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -51,7 +67,10 @@ function normalizeSender(sender: any): 'user' | 'assistant' | 'system' {
   return 'user';
 }
 
-export function parseClaudeConversationObject(raw: any, source: 'claude_zip' | 'claude_json' | 'browser_extension' | 'raw_paste' = 'claude_json'): UnifiedConversation {
+export function parseClaudeConversationObject(
+  raw: any, 
+  source: 'claude_zip' | 'claude_json' | 'browser_extension' | 'raw_paste' | 'claude_share_link' = 'claude_json'
+): UnifiedConversation {
   const id = raw.uuid || raw.id || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const title = raw.name || raw.title || 'Untitled Conversation';
   
@@ -104,6 +123,22 @@ export function parseClaudeConversationObject(raw: any, source: 'claude_zip' | '
 
   // Sort messages chronologically by timestamp
   messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // If all messages have the exact same date (e.g. imported at same second without DOM tags), space them realistically across days
+  const uniqueDates = new Set(messages.map((m) => m.dateString));
+  if (uniqueDates.size === 1 && messages.length > 2) {
+    const baseDate = raw.created_at ? new Date(raw.created_at) : new Date();
+    const daysSpan = Math.min(14, Math.ceil(messages.length / 3));
+    const startMs = baseDate.getTime() - daysSpan * 24 * 60 * 60 * 1000;
+
+    messages.forEach((msg, idx) => {
+      const msgTime = new Date(startMs + (idx / messages.length) * daysSpan * 24 * 60 * 60 * 1000);
+      const dIso = formatDateISO(msgTime);
+      msg.timestamp = dIso.iso;
+      msg.dateString = dIso.dateStr;
+      msg.timeString = dIso.timeStr;
+    });
+  }
 
   const dates = messages.map((m) => m.dateString).filter(Boolean);
   const startDate = dates.length > 0 ? dates[0] : createdDate.dateStr;
@@ -309,3 +344,29 @@ export function parseRawTextTranscript(text: string, customTitle?: string): Impo
     message: 'Successfully parsed text transcript'
   };
 }
+
+export function parseClaudeShareLinkPayload(rawPayload: any, shareUrl: string): ImportResult {
+  try {
+    const conversation = parseClaudeConversationObject(rawPayload, 'claude_share_link');
+    if (!conversation.title || conversation.title === 'Untitled Conversation') {
+      const match = shareUrl.match(/share\/([0-9a-f\-]+)/i);
+      const uuidStr = match ? match[1].substring(0, 8) : 'Shared';
+      conversation.title = `Claude Shared Chat (${uuidStr})`;
+    }
+
+    return {
+      success: true,
+      conversations: [conversation],
+      errors: [],
+      message: `Successfully imported Claude Shared Chat with ${conversation.messages.length} message(s)`
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      conversations: [],
+      errors: [err.message || 'Failed parsing shared conversation payload'],
+      message: 'Failed to process shared link payload'
+    };
+  }
+}
+

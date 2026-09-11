@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { parseClaudeZipFile, parseClaudeJsonContent, parseRawTextTranscript } from '../parser';
+import { parseClaudeZipFile, parseClaudeJsonContent, parseRawTextTranscript, parseClaudeShareLinkPayload } from '../parser';
 import { UnifiedConversation, ImportResult } from '../types';
+import { BookmarkletBridgeModal } from '@/bridge/components/BookmarkletBridgeModal';
 import { 
   Upload, 
   FileText, 
@@ -12,7 +13,12 @@ import {
   FileCode, 
   Clipboard, 
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Link as LinkIcon,
+  Globe,
+  Loader2,
+  ExternalLink,
+  Zap
 } from 'lucide-react';
 
 interface ImportModalProps {
@@ -26,7 +32,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   onClose,
   onImportSuccess
 }) => {
-  const [activeTab, setActiveTab] = useState<'zip' | 'paste'>('zip');
+  const [activeTab, setActiveTab] = useState<'bridge' | 'link' | 'zip' | 'paste'>('bridge');
+  const [shareUrl, setShareUrl] = useState('https://claude.ai/share/791d8870-1931-45eb-a7b7-3110f50c4940');
   const [dragActive, setDragActive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [pastedText, setPastedText] = useState('');
@@ -34,6 +41,81 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   if (!isOpen) return null;
+
+  const handleShareUrlSubmit = async () => {
+    if (!shareUrl.trim()) return;
+    setIsLoading(true);
+    setImportResult(null);
+
+    const uuidMatch = shareUrl.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    const uuid = uuidMatch ? uuidMatch[0] : null;
+
+    let rawConversationData: any = null;
+
+    // Attempt 1: Server Route Fetch
+    try {
+      const res = await fetch('/api/fetch-claude-share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: shareUrl.trim() })
+      });
+
+      const data = await res.json();
+      if (data.success && data.rawConversation) {
+        rawConversationData = data.rawConversation;
+      }
+    } catch (err) {
+      console.warn('Server fetch attempt failed:', err);
+    }
+
+    // Attempt 2: Direct Client Browser Fetch (if server route was blocked by Cloudflare)
+    if (!rawConversationData && uuid) {
+      try {
+        const snapshotUrl = `https://claude.ai/api/chat_snapshots/${uuid}?rendering_mode=messages&render_all_tools=true`;
+        const clientRes = await fetch(snapshotUrl, { mode: 'cors' });
+        if (clientRes.ok) {
+          rawConversationData = await clientRes.json();
+        }
+      } catch (err) {
+        console.warn('Direct client fetch attempt failed:', err);
+      }
+    }
+
+    // Attempt 3: Public CORS Proxy Fetch (Bypasses Cloudflare Server IP restrictions)
+    if (!rawConversationData && uuid) {
+      try {
+        const proxyUrl = `https://corsproxy.io/?https://claude.ai/api/chat_snapshots/${uuid}?rendering_mode=messages&render_all_tools=true`;
+        const proxyRes = await fetch(proxyUrl);
+        if (proxyRes.ok) {
+          const json = await proxyRes.json();
+          if (json && (json.chat_messages || json.messages || json.snapshot)) {
+            rawConversationData = json;
+          }
+        }
+      } catch (err) {
+        console.warn('CORS proxy fetch attempt failed:', err);
+      }
+    }
+
+    if (rawConversationData) {
+      const result = parseClaudeShareLinkPayload(rawConversationData, shareUrl);
+      setImportResult(result);
+      if (result.success && result.conversations.length > 0) {
+        onImportSuccess(result.conversations);
+      }
+    } else {
+      setImportResult({
+        success: false,
+        conversations: [],
+        errors: [
+          `Claude.ai requires direct browser access for shared link (${uuid ? uuid.substring(0, 8) : 'shared'}). Open the link in your browser, copy the text or HTML, and paste it into the Paste tab to import 100% of your real chat!`
+        ],
+        message: 'Cloudflare Verification Required'
+      });
+    }
+
+    setIsLoading(false);
+  };
 
   const handleFileUpload = async (file: File) => {
     setIsLoading(true);
@@ -125,30 +207,138 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         {/* Tab Switcher */}
         <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
           <button
+            onClick={() => setActiveTab('bridge')}
+            className={`flex-1 py-2 rounded-lg font-medium transition-all flex items-center justify-center space-x-1.5 ${
+              activeTab === 'bridge'
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>1-Click Bridge</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('link')}
+            className={`flex-1 py-2 rounded-lg font-medium transition-all flex items-center justify-center space-x-1.5 ${
+              activeTab === 'link'
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <LinkIcon className="w-3.5 h-3.5" />
+            <span>Shared Link</span>
+          </button>
+          <button
             onClick={() => setActiveTab('zip')}
-            className={`flex-1 py-2 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 ${
+            className={`flex-1 py-2 rounded-lg font-medium transition-all flex items-center justify-center space-x-1.5 ${
               activeTab === 'zip'
                 ? 'bg-amber-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <FileCode className="w-3.5 h-3.5" />
-            <span>Upload Zip / JSON</span>
+            <span>Zip Export</span>
           </button>
           <button
             onClick={() => setActiveTab('paste')}
-            className={`flex-1 py-2 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 ${
+            className={`flex-1 py-2 rounded-lg font-medium transition-all flex items-center justify-center space-x-1.5 ${
               activeTab === 'paste'
                 ? 'bg-amber-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <Clipboard className="w-3.5 h-3.5" />
-            <span>Paste Transcript</span>
+            <span>Paste Text</span>
           </button>
         </div>
 
-        {/* Tab 1: Zip / JSON File Drag and Drop */}
+        {/* Tab 0: Temporary 1-Click Bookmarklet Bridge */}
+        {activeTab === 'bridge' && (
+          <BookmarkletBridgeModal onImportSuccess={onClose} />
+        )}
+
+        {/* Tab 1: Claude Shared Link Import */}
+        {activeTab === 'link' && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-slate-300 flex items-center space-x-1.5">
+                <Globe className="w-3.5 h-3.5 text-amber-400" />
+                <span>Paste Public Claude Share Link:</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="url"
+                  value={shareUrl}
+                  onChange={(e) => setShareUrl(e.target.value)}
+                  placeholder="https://claude.ai/share/791d8870-1931-45eb-a7b7-3110f50c4940"
+                  className="w-full bg-slate-950 border border-slate-800 text-amber-300 text-xs rounded-xl pl-3 pr-10 py-2.5 focus:outline-none focus:border-amber-500 font-mono"
+                />
+                {shareUrl && (
+                  <button
+                    onClick={() => setShareUrl('')}
+                    className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Paste any public share link like <code className="text-amber-300/90 font-mono bg-slate-950 px-1 py-0.5 rounded border border-slate-800">https://claude.ai/share/...</code>
+              </p>
+            </div>
+
+            <button
+              onClick={handleShareUrlSubmit}
+              disabled={!shareUrl.trim() || isLoading}
+              className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center space-x-2 shadow-md shadow-amber-950/30"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Fetching Shared Conversation...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  <span>Import Shared Claude Link</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </>
+              )}
+            </button>
+
+            {/* Cloudflare Help Card if blocked */}
+            {importResult && !importResult.success && (
+              <div className="p-3 bg-slate-950 border border-amber-500/30 rounded-xl space-y-2 text-xs text-slate-300">
+                <div className="flex items-center space-x-1.5 font-medium text-amber-400">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>Cloudflare Protection Detected</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Anthropic's server blocks direct automated server fetches to <code className="text-amber-300 font-mono">{shareUrl}</code>.
+                </p>
+                <div className="pt-1 flex items-center space-x-2">
+                  <a
+                    href={shareUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-[11px] font-medium transition-colors flex items-center space-x-1"
+                  >
+                    <span>1. Open Link in Browser</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                  <button
+                    onClick={() => setActiveTab('paste')}
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[11px] font-medium transition-colors"
+                  >
+                    2. Copy Chat Text & Paste Here
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 2: Zip / JSON File Drag and Drop */}
         {activeTab === 'zip' && (
           <div
             onDragOver={handleDragOver}
@@ -186,7 +376,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
           </div>
         )}
 
-        {/* Tab 2: Raw Text Transcript Paste */}
+        {/* Tab 3: Raw Text Transcript Paste */}
         {activeTab === 'paste' && (
           <div className="space-y-3">
             <input
@@ -200,7 +390,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
               value={pastedText}
               onChange={(e) => setPastedText(e.target.value)}
               rows={6}
-              placeholder="Paste your chat transcript here... (e.g. Human: How do I... / Assistant: Sure! ...)"
+              placeholder="Paste your chat text copied directly from Claude here... (e.g. User: ... / Claude: ...)"
               className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl p-3 focus:outline-none focus:border-amber-500 font-mono scrollbar-thin scrollbar-thumb-slate-800 placeholder-slate-600"
             />
             <button
@@ -208,7 +398,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
               disabled={!pastedText.trim() || isLoading}
               className="w-full py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center space-x-1"
             >
-              <span>Parse & Import Transcript</span>
+              <span>Parse & Import Real Transcript</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

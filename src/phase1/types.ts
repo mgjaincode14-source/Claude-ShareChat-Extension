@@ -31,7 +31,7 @@ export interface UnifiedConversation {
   messages: UnifiedMessage[];
   metadata: {
     model?: string;
-    exportSource: 'claude_zip' | 'claude_json' | 'browser_extension' | 'raw_paste';
+    exportSource: 'claude_zip' | 'claude_json' | 'browser_extension' | 'raw_paste' | 'claude_share_link';
     totalMessages: number;
     userMessagesCount: number;
     assistantMessagesCount: number;
