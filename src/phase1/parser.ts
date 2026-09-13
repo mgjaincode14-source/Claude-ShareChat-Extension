@@ -6,16 +6,24 @@ function formatDateISO(dateInput: string | Date | undefined): { iso: string; dat
     if (!dateInput) throw new Error('Empty date');
     let d = new Date(dateInput);
 
-    // If parsing failed, check if it's a short date string like "Aug 19" or "Aug 19, 7:50 PM"
+    // If parsing failed, check for custom formats like "15-Aug-2026", "2-Sep-2026", "Aug 19", "Aug 24, 2026, 6:46 PM"
     if (isNaN(d.getTime()) && typeof dateInput === 'string') {
       const cleaned = dateInput.trim();
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const monthMatch = cleaned.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})/i);
-      if (monthMatch) {
-        const month = monthMatch[1];
-        const day = monthMatch[2];
-        const year = new Date().getFullYear();
-        d = new Date(`${month} ${day}, ${year}`);
+
+      // Format: 15-Aug-2026 or 2-Sep-2026 or 15 Aug 2026
+      const dmyMatch = cleaned.match(/(\d{1,2})[-/\s]+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[-/\s]+(\d{4})/i);
+      if (dmyMatch) {
+        d = new Date(`${dmyMatch[2]} ${dmyMatch[1]}, ${dmyMatch[3]}`);
+      } else {
+        // Format: Aug 19 or Aug 19, 2026 or Aug 24, 2026, 6:46 PM
+        const mdyMatch = cleaned.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[-/\s]+(\d{1,2})(?:[,-\s]+(\d{4}))?(?:[,-\s]+(\d{1,2}:\d{2}\s*(?:AM|PM)?))?/i);
+        if (mdyMatch) {
+          const month = mdyMatch[1];
+          const day = mdyMatch[2];
+          const year = mdyMatch[3] || new Date().getFullYear();
+          const timePart = mdyMatch[4] ? `, ${mdyMatch[4]}` : '';
+          d = new Date(`${month} ${day}, ${year}${timePart}`);
+        }
       }
     }
 
@@ -26,12 +34,10 @@ function formatDateISO(dateInput: string | Date | undefined): { iso: string; dat
     const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     return { iso, dateStr, timeStr };
   } catch {
-    const fallback = new Date();
-    const iso = fallback.toISOString();
     return {
-      iso,
-      dateStr: iso.split('T')[0],
-      timeStr: fallback.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      iso: '',
+      dateStr: '',
+      timeStr: ''
     };
   }
 }
@@ -90,7 +96,20 @@ export function parseClaudeConversationObject(
     if (sender === 'assistant') assistantCount++;
 
     const textContent = extractTextFromContent(m);
-    const msgDate = formatDateISO(m.created_at || m.timestamp || raw.created_at);
+    let msgDate = formatDateISO(m.created_at || m.timestamp);
+    if (!msgDate.dateStr && raw.created_at) {
+      const rawDate = formatDateISO(raw.created_at);
+      if (rawDate.dateStr) {
+        msgDate = rawDate;
+      }
+    }
+    if (!msgDate.dateStr) {
+      msgDate = {
+        iso: new Date().toISOString(),
+        dateStr: 'Original Chat Date',
+        timeStr: ''
+      };
+    }
 
     const rawAttachments = m.attachments || m.files || [];
     const attachments: FileAttachment[] = Array.isArray(rawAttachments)
@@ -121,12 +140,20 @@ export function parseClaudeConversationObject(
     };
   });
 
-  // Sort messages chronologically by timestamp
-  messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  // Sort messages chronologically by timestamp if valid
+  messages.sort((a, b) => {
+    const tA = new Date(a.timestamp).getTime();
+    const tB = new Date(b.timestamp).getTime();
+    if (isNaN(tA) || isNaN(tB)) return 0;
+    return tA - tB;
+  });
 
-  // If all messages have the exact same date (e.g. imported at same second without DOM tags), space them realistically across days
+  // Check if any message provided explicit timestamp/created_at
+  const hasExplicitMessageTimestamps = rawMessages.some((m: any) => !!(m.created_at || m.timestamp));
   const uniqueDates = new Set(messages.map((m) => m.dateString));
-  if (uniqueDates.size === 1 && messages.length > 2) {
+
+  // ONLY distribute timestamps artificially IF NO explicit message timestamps were provided AND source is ZIP export
+  if (!hasExplicitMessageTimestamps && uniqueDates.size === 1 && messages.length > 2 && source === 'claude_zip') {
     const baseDate = raw.created_at ? new Date(raw.created_at) : new Date();
     const daysSpan = Math.min(14, Math.ceil(messages.length / 3));
     const startMs = baseDate.getTime() - daysSpan * 24 * 60 * 60 * 1000;

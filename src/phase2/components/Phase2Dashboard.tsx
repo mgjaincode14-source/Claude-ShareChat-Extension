@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { UnifiedConversation, UnifiedMessage } from '@/phase1/types';
 import { getAllConversations, saveConversations } from '@/phase1/db';
@@ -8,7 +8,7 @@ import { SAMPLE_CLAUDE_CONVERSATIONS } from '@/phase1/sampleData';
 import { ConversationList } from '@/phase1/components/ConversationList';
 import { RawJsonModal } from '@/phase1/components/RawJsonModal';
 import { SelectionOptions, SelectionSummary } from '../types';
-import { getSelectionSummary, filterMessagesBySelection } from '../engine';
+import { getSelectionSummary, getDateBoundaries, filterMessagesBySelection } from '../engine';
 import { SelectionToolbar } from './SelectionToolbar';
 import { SelectionSummaryPanel } from './SelectionSummaryPanel';
 import { SelectiveMessageViewer } from './SelectiveMessageViewer';
@@ -35,21 +35,31 @@ export const Phase2Dashboard: React.FC = () => {
     contextDepth: 1
   });
 
-  const checkForBridgedImports = async () => {
+  // Track last processed bridge import ID to avoid resetting state on every poll
+  const lastProcessedBridgeIdRef = useRef<string | null>(null);
+
+  const checkForBridgedImports = useCallback(async (): Promise<string | null> => {
     try {
       const res = await fetch('/api/bridge-import');
       const bridgeData = await res.json();
-      if (bridgeData.success && bridgeData.latestConversations && bridgeData.latestConversations.length > 0) {
+      if (
+        bridgeData.success &&
+        bridgeData.lastImportId &&
+        bridgeData.lastImportId !== lastProcessedBridgeIdRef.current &&
+        bridgeData.latestConversations &&
+        bridgeData.latestConversations.length > 0
+      ) {
         await saveConversations(bridgeData.latestConversations);
-        return bridgeData.latestConversations[0].id;
+        lastProcessedBridgeIdRef.current = bridgeData.lastImportId;
+        return bridgeData.lastImportId;
       }
     } catch (err) {
       console.warn('Bridge sync error:', err);
     }
     return null;
-  };
+  }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const latestBridgedId = await checkForBridgedImports();
     let data = await getAllConversations();
     if (data.length === 0) {
@@ -57,52 +67,67 @@ export const Phase2Dashboard: React.FC = () => {
       data = await getAllConversations();
     }
     setConversations(data);
-    const activeId = latestBridgedId || (data.length > 0 ? (selectedId || data[0].id) : null);
-    if (activeId) {
-      setSelectedId(activeId);
-      const target = data.find((c) => c.id === activeId);
+
+    if (latestBridgedId) {
+      setSelectedId(latestBridgedId);
+      const target = data.find((c) => c.id === latestBridgedId);
       if (target) {
+        const { minDate, maxDate } = getDateBoundaries(target);
         setSelectionOptions((prev) => ({
           ...prev,
+          startDate: minDate,
+          endDate: maxDate,
+          selectedDate: minDate,
           selectedMessageIds: target.messages.map((m) => m.id)
         }));
       }
+    } else if (data.length > 0) {
+      setSelectedId((prev) => prev || data[0].id);
     }
-  };
+  }, [checkForBridgedImports]);
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(() => {
-      checkForBridgedImports().then((newId) => {
-        if (newId) {
-          getAllConversations().then((updated) => {
-            setConversations(updated);
-            setSelectedId(newId);
-            const target = updated.find((c) => c.id === newId);
-            if (target) {
-              setSelectionOptions((prev) => ({
-                ...prev,
-                selectedMessageIds: target.messages.map((m) => m.id)
-              }));
-            }
-          });
+    const interval = setInterval(async () => {
+      const newId = await checkForBridgedImports();
+      if (newId) {
+        const updated = await getAllConversations();
+        setConversations(updated);
+        setSelectedId(newId);
+        const target = updated.find((c) => c.id === newId);
+        if (target) {
+          const { minDate, maxDate } = getDateBoundaries(target);
+          setSelectionOptions((prev) => ({
+            ...prev,
+            startDate: minDate,
+            endDate: maxDate,
+            selectedDate: minDate,
+            selectedMessageIds: target.messages.map((m) => m.id)
+          }));
         }
-      });
-    }, 2500);
+      }
+    }, 3000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const currentConversation = conversations.find((c) => c.id === selectedId) || null;
 
-  // When switching conversations, reset selected IDs
+  // When switching conversations, reset selected IDs and sync date bounds
   const handleSelectConversation = (id: string) => {
     setSelectedId(id);
     const target = conversations.find((c) => c.id === id);
     if (target) {
-      setSelectionOptions((prev) => ({
-        ...prev,
-        selectedMessageIds: target.messages.map((m) => m.id)
-      }));
+      const { minDate, maxDate } = getDateBoundaries(target);
+      setSelectionOptions({
+        mode: 'all',
+        startDate: minDate,
+        endDate: maxDate,
+        selectedDate: minDate,
+        selectedMessageIds: target.messages.map((m) => m.id),
+        includePrecedingContext: true,
+        contextDepth: 1
+      });
     }
   };
 

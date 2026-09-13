@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { UnifiedConversation } from '@/phase1/types';
-import { SelectionOptions, SelectionMode, DateSummary } from '../types';
+import { SelectionOptions, SelectionMode } from '../types';
 import { getAvailableDates, getDateBoundaries } from '../engine';
 import { 
   Calendar, 
@@ -13,7 +13,6 @@ import {
   RotateCcw, 
   CheckCircle2, 
   XSquare,
-  Sparkles,
   ListFilter
 } from 'lucide-react';
 
@@ -39,6 +38,9 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
   const availableDates = getAvailableDates(conversation);
   const { minDate, maxDate } = getDateBoundaries(conversation);
 
+  const activeStartDate = options.startDate && options.startDate >= minDate && options.startDate <= maxDate ? options.startDate : minDate;
+  const activeEndDate = options.endDate && options.endDate >= minDate && options.endDate <= maxDate ? options.endDate : maxDate;
+
   const handleModeChange = (mode: SelectionMode) => {
     const nextOptions: SelectionOptions = {
       ...options,
@@ -50,8 +52,8 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     }
 
     if (mode === 'date_range') {
-      if (!options.startDate) nextOptions.startDate = minDate;
-      if (!options.endDate) nextOptions.endDate = maxDate;
+      nextOptions.startDate = activeStartDate;
+      nextOptions.endDate = activeEndDate;
     }
 
     onChangeOptions(nextOptions);
@@ -67,7 +69,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
           </div>
           <div>
             <h2 className="text-sm font-semibold text-slate-100">Selection Filter Engine</h2>
-            <p className="text-[11px] text-slate-400">Choose how to filter conversation messages</p>
+            <p className="text-[11px] text-slate-400">Choose how to filter conversation messages before sharing</p>
           </div>
         </div>
 
@@ -150,7 +152,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             <div className="flex items-center space-x-2">
               <span className="text-slate-400 font-medium">From:</span>
               <select
-                value={options.startDate && options.startDate >= minDate && options.startDate <= maxDate ? options.startDate : minDate}
+                value={activeStartDate}
                 onChange={(e) => onChangeOptions({ ...options, startDate: e.target.value })}
                 className="bg-slate-950 border border-slate-800 text-amber-300 rounded-lg px-2.5 py-1 focus:outline-none focus:border-amber-500 font-mono text-xs"
               >
@@ -164,7 +166,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
                 type="date"
                 min={minDate}
                 max={maxDate}
-                value={options.startDate && options.startDate >= minDate && options.startDate <= maxDate ? options.startDate : minDate}
+                value={activeStartDate}
                 onChange={(e) => onChangeOptions({ ...options, startDate: e.target.value })}
                 className="bg-slate-950 border border-slate-800 text-amber-300 rounded-lg px-2 py-1 focus:outline-none focus:border-amber-500 font-mono text-xs"
               />
@@ -174,7 +176,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             <div className="flex items-center space-x-2">
               <span className="text-slate-400 font-medium">To:</span>
               <select
-                value={options.endDate && options.endDate >= minDate && options.endDate <= maxDate ? options.endDate : maxDate}
+                value={activeEndDate}
                 onChange={(e) => onChangeOptions({ ...options, endDate: e.target.value })}
                 className="bg-slate-950 border border-slate-800 text-amber-300 rounded-lg px-2.5 py-1 focus:outline-none focus:border-amber-500 font-mono text-xs"
               >
@@ -188,7 +190,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
                 type="date"
                 min={minDate}
                 max={maxDate}
-                value={options.endDate && options.endDate >= minDate && options.endDate <= maxDate ? options.endDate : maxDate}
+                value={activeEndDate}
                 onChange={(e) => onChangeOptions({ ...options, endDate: e.target.value })}
                 className="bg-slate-950 border border-slate-800 text-amber-300 rounded-lg px-2 py-1 focus:outline-none focus:border-amber-500 font-mono text-xs"
               />
@@ -213,20 +215,6 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
                 className="px-2 py-1 bg-slate-950 hover:bg-slate-800 text-slate-300 rounded border border-slate-800 text-[11px] transition-colors"
               >
                 Last Day ({maxDate})
-              </button>
-            </div>
-          </div>
-        )}
-                onClick={() => onChangeOptions({ ...options, startDate: minDate, endDate: minDate })}
-                className="px-2 py-1 bg-slate-950 hover:bg-slate-800 text-slate-300 rounded border border-slate-800 text-[11px] transition-colors"
-              >
-                First Day
-              </button>
-              <button
-                onClick={() => onChangeOptions({ ...options, startDate: maxDate, endDate: maxDate })}
-                className="px-2 py-1 bg-slate-950 hover:bg-slate-800 text-slate-300 rounded border border-slate-800 text-[11px] transition-colors"
-              >
-                Last Day
               </button>
             </div>
           </div>

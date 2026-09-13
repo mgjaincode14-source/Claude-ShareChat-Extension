@@ -78,7 +78,24 @@ export const SelectionSummaryPanel: React.FC<SelectionSummaryPanelProps> = ({ su
             <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-950 rounded-xl border border-slate-800 text-slate-300 font-mono">
               <Calendar className="w-3.5 h-3.5 text-slate-400" />
               <span>
-                {summary.effectiveDateRange.start} → {summary.effectiveDateRange.end}
+                {(() => {
+                  const fmt = (ds: string) => {
+                    try {
+                      const parts = ds.split('-');
+                      if (parts.length === 3) {
+                        const d = new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
+                        const day = d.getUTCDate();
+                        const month = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+                        const year = d.getUTCFullYear();
+                        return `${day}-${month}-${year}`;
+                      }
+                      return ds;
+                    } catch { return ds; }
+                  };
+                  const start = fmt(summary.effectiveDateRange!.start);
+                  const end = fmt(summary.effectiveDateRange!.end);
+                  return start === end ? start : `${start} → ${end}`;
+                })()}
               </span>
             </div>
           )}

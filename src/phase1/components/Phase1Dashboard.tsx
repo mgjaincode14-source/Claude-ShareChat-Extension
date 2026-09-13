@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { UnifiedConversation, UnifiedMessage } from '../types';
 import { 
   getAllConversations, 
@@ -26,21 +26,31 @@ export const Phase1Dashboard: React.FC = () => {
   const [stats, setStats] = useState({ conversationCount: 0, totalMessagesCount: 0 });
   const [isLoading, setIsLoading] = useState(true);
 
-  const checkForBridgedImports = async () => {
+  // Track last processed bridge import to avoid resetting state every poll
+  const lastProcessedBridgeIdRef = useRef<string | null>(null);
+
+  const checkForBridgedImports = useCallback(async (): Promise<string | null> => {
     try {
       const res = await fetch('/api/bridge-import');
       const bridgeData = await res.json();
-      if (bridgeData.success && bridgeData.latestConversations && bridgeData.latestConversations.length > 0) {
+      if (
+        bridgeData.success &&
+        bridgeData.lastImportId &&
+        bridgeData.lastImportId !== lastProcessedBridgeIdRef.current &&
+        bridgeData.latestConversations &&
+        bridgeData.latestConversations.length > 0
+      ) {
         await saveConversations(bridgeData.latestConversations);
-        return bridgeData.latestConversations[0].id;
+        lastProcessedBridgeIdRef.current = bridgeData.lastImportId;
+        return bridgeData.lastImportId;
       }
     } catch (err) {
       console.warn('Bridge sync error:', err);
     }
     return null;
-  };
+  }, []);
 
-  const loadDataFromDb = async () => {
+  const loadDataFromDb = useCallback(async () => {
     setIsLoading(true);
     try {
       const latestBridgedId = await checkForBridgedImports();
@@ -55,8 +65,8 @@ export const Phase1Dashboard: React.FC = () => {
       setConversations(data);
       if (latestBridgedId) {
         setSelectedId(latestBridgedId);
-      } else if (data.length > 0 && !selectedId) {
-        setSelectedId(data[0].id);
+      } else if (data.length > 0) {
+        setSelectedId((prev) => prev || data[0].id);
       }
 
       const currentStats = await getDatabaseStats();
@@ -66,22 +76,23 @@ export const Phase1Dashboard: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [checkForBridgedImports]);
 
   useEffect(() => {
     loadDataFromDb();
-    // Auto-poll for new bridged imports every 2.5 seconds
-    const interval = setInterval(() => {
-      checkForBridgedImports().then((newId) => {
-        if (newId) {
-          getAllConversations().then((updated) => {
-            setConversations(updated);
-            setSelectedId(newId);
-          });
-        }
-      });
-    }, 2500);
+    // Auto-poll for new bridged imports every 3 seconds
+    const interval = setInterval(async () => {
+      const newId = await checkForBridgedImports();
+      if (newId) {
+        const updated = await getAllConversations();
+        setConversations(updated);
+        setSelectedId(newId);
+        const currentStats = await getDatabaseStats();
+        setStats(currentStats);
+      }
+    }, 3000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSelectConversation = (id: string) => {

@@ -5,25 +5,38 @@ import path from 'path';
 
 const CACHE_FILE_PATH = path.join(process.cwd(), 'src', 'phase1', 'bridged_cache.json');
 
-function getCachedBridgedConversations(): any[] {
+interface BridgeCache {
+  lastImportId: string | null;
+  conversations: any[];
+}
+
+function readCache(): BridgeCache {
   try {
     if (fs.existsSync(CACHE_FILE_PATH)) {
       const fileData = fs.readFileSync(CACHE_FILE_PATH, 'utf-8');
-      return JSON.parse(fileData) || [];
+      const parsed = JSON.parse(fileData);
+      // Handle legacy format (plain array)
+      if (Array.isArray(parsed)) {
+        return {
+          lastImportId: parsed.length > 0 ? parsed[0].id : null,
+          conversations: parsed
+        };
+      }
+      return parsed;
     }
   } catch (err) {
     console.warn('Error reading bridged cache file:', err);
   }
-  return [];
+  return { lastImportId: null, conversations: [] };
 }
 
-function saveCachedBridgedConversations(conversations: any[]) {
+function writeCache(cache: BridgeCache) {
   try {
     const dir = path.dirname(CACHE_FILE_PATH);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(CACHE_FILE_PATH, JSON.stringify(conversations, null, 2), 'utf-8');
+    fs.writeFileSync(CACHE_FILE_PATH, JSON.stringify(cache, null, 2), 'utf-8');
   } catch (err) {
     console.warn('Error writing bridged cache file:', err);
   }
@@ -45,7 +58,7 @@ export async function POST(req: Request) {
   try {
     const rawPayload = await req.json();
 
-    if (!rawPayload || !rawPayload.chat_messages) {
+    if (!rawPayload || !(rawPayload.chat_messages || rawPayload.messages)) {
       return NextResponse.json(
         { success: false, error: 'Invalid payload structure' },
         {
@@ -55,20 +68,28 @@ export async function POST(req: Request) {
       );
     }
 
+    // Use 'browser_extension' source — the bookmarklet fetches from Claude's
+    // internal API which returns the FULL conversation with per-message
+    // created_at timestamps (real ISO strings). The parser will trust those
+    // and NOT apply any synthetic date fallback.
     const unifiedConv = parseClaudeConversationObject(rawPayload, 'browser_extension');
-    const currentCache = getCachedBridgedConversations();
 
-    // Filter out duplicates by id
-    const filteredCache = currentCache.filter((c) => c.id !== unifiedConv.id);
-    filteredCache.unshift(unifiedConv);
+    const cache = readCache();
 
-    saveCachedBridgedConversations(filteredCache);
+    // Deduplicate: remove existing conversation with the same id
+    cache.conversations = cache.conversations.filter((c) => c.id !== unifiedConv.id);
+    cache.conversations.unshift(unifiedConv);
+
+    // Track latest import for polling detection
+    cache.lastImportId = unifiedConv.id;
+
+    writeCache(cache);
 
     return NextResponse.json(
       {
         success: true,
         conversation: unifiedConv,
-        message: `Successfully bridged ${unifiedConv.messages.length} message(s)`
+        message: `Successfully bridged ${unifiedConv.messages.length} message(s) with original timestamps`
       },
       {
         status: 200,
@@ -87,11 +108,12 @@ export async function POST(req: Request) {
 }
 
 export async function GET() {
-  const cached = getCachedBridgedConversations();
+  const cache = readCache();
   return NextResponse.json(
     {
       success: true,
-      latestConversations: cached
+      lastImportId: cache.lastImportId,
+      latestConversations: cache.conversations
     },
     {
       status: 200,

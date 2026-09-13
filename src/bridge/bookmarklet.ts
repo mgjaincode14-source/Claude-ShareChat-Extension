@@ -1,79 +1,53 @@
 /**
- * Self-contained bookmarklet script to be executed on any claude.ai tab.
- * It extracts active conversation messages AND their historical DOM dates/timestamps
- * and sends them to http://localhost:3000/api/bridge-import.
+ * Self-contained bookmarklet script to be executed on a claude.ai chat tab.
+ *
+ * IMPORTANT: This calls Claude's own internal conversation API directly from the
+ * page (same-origin, so the browser sends session cookies automatically). That
+ * API returns the FULL message tree with the REAL per-message created_at
+ * timestamp for every message, regardless of scroll position or hover state -
+ * the same shape as the official data export, which parser.ts already handles.
  */
 
-export const BOOKMARKLET_HREF = `javascript:${encodeURIComponent(`(function(){
+export const BOOKMARKLET_HREF = `javascript:${encodeURIComponent(`(async function(){
   try {
-    var title = (document.title || 'Imported Claude Chat').replace(' - Claude','').trim();
-    var msgs = [];
-    
-    // Select chat message blocks
-    var nodes = document.querySelectorAll('.font-user-message, .font-claude-message, [data-testid="user-message"], [data-testid="chat-message"], .prose');
-    
-    var lastDateFound = new Date().toISOString();
-
-    if (nodes.length > 0) {
-      nodes.forEach(function(n, i){
-        var isUser = n.classList.contains('font-user-message') || n.getAttribute('data-testid') === 'user-message';
-        var txt = n.innerText || n.textContent || '';
-        
-        // Search for date/time elements in container or parent block (e.g. "Aug 19", "Aug 19, 2026", <time>)
-        var dateStr = null;
-        var parentBlock = n.closest('.grid-cols-1, [data-testid="user-message"], [data-testid="chat-message"]') || n.parentElement;
-        
-        if (parentBlock) {
-          var timeEl = parentBlock.querySelector('time, [title*="202"], [title*="2025"], [title*="2026"]');
-          if (timeEl) {
-            dateStr = timeEl.getAttribute('datetime') || timeEl.getAttribute('title') || timeEl.innerText;
-          }
-          
-          if (!dateStr) {
-            var textNodes = parentBlock.innerText || '';
-            var match = textNodes.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+\\d{1,2}(,\\s*\\d{4})?/i);
-            if (match) {
-              dateStr = match[0];
-            }
-          }
-        }
-
-        if (dateStr) {
-          lastDateFound = dateStr;
-        }
-
-        if (txt.trim()) {
-          msgs.push({
-            id: 'msg_b_' + i + '_' + Date.now(),
-            sender: isUser ? 'user' : 'assistant',
-            text: txt.trim(),
-            created_at: dateStr || lastDateFound || new Date().toISOString()
-          });
-        }
-      });
-    } else {
-      msgs.push({
-        id: 'msg_b_0_' + Date.now(),
-        sender: 'user',
-        text: document.body.innerText.substring(0, 8000),
-        created_at: new Date().toISOString()
-      });
+    function getCookie(name) {
+      var m = document.cookie.match('(?:^|; )' + name + '=([^;]*)');
+      return m ? decodeURIComponent(m[1]) : null;
     }
 
-    var payload = {
-      uuid: 'conv_bridge_' + Date.now(),
-      name: title,
-      created_at: msgs.length > 0 ? msgs[0].created_at : new Date().toISOString(),
-      chat_messages: msgs
-    };
+    // 1. Resolve org id (cookie first, fallback to /api/organizations)
+    var orgId = getCookie('lastActiveOrg');
+    if (!orgId) {
+      var orgRes = await fetch('https://claude.ai/api/organizations', { credentials: 'include' });
+      if (!orgRes.ok) throw new Error('Could not resolve organization (are you logged into claude.ai in this tab?)');
+      var orgs = await orgRes.json();
+      if (!Array.isArray(orgs) || orgs.length === 0) throw new Error('No organizations found for this account');
+      orgId = orgs[0].uuid;
+    }
 
+    // 2. Resolve conversation id from the current URL, e.g. https://claude.ai/chat/<uuid>
+    var convMatch = window.location.pathname.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    if (!convMatch) throw new Error('Open an actual conversation tab (URL should look like claude.ai/chat/<id>) before running this.');
+    var conversationId = convMatch[0];
+
+    // 3. Fetch the FULL conversation with REAL per-message timestamps directly from Claude's API
+    var apiUrl = 'https://claude.ai/api/organizations/' + orgId + '/chat_conversations/' + conversationId +
+                 '?tree=True&rendering_mode=messages&render_all_tools=true';
+    var convRes = await fetch(apiUrl, { credentials: 'include' });
+    if (!convRes.ok) throw new Error('Claude API request failed (status ' + convRes.status + '). Try refreshing the page and running again.');
+    var rawConversation = await convRes.json();
+
+    var msgCount = (rawConversation.chat_messages || rawConversation.messages || []).length;
+    if (msgCount === 0) throw new Error('No messages found in API response - conversation may still be loading.');
+
+    // 4. Send the raw, real conversation payload to the bridge
     fetch('http://localhost:3000/api/bridge-import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       mode: 'cors',
-      body: JSON.stringify(payload)
+      body: JSON.stringify(rawConversation)
     }).then(function(r){ return r.json(); }).then(function(d){
-      alert('⚡ Imported ' + msgs.length + ' message(s) with historical dates to Claude Selective Tool!');
+      alert('⚡ Imported ALL ' + msgCount + ' message(s) with exact original timestamps from Claude!');
       window.open('http://localhost:3000/phase2', '_blank');
     }).catch(function(err){
       alert('Error sending to http://localhost:3000. Make sure npm run dev is running!');

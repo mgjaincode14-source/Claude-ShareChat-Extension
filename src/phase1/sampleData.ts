@@ -77,14 +77,14 @@ export default async function DashboardPage({ params }: { params: { tenantId: st
           created_at: '2026-08-23T11:45:00Z',
           text: `When executing server actions or API routes, environment variables must remain strictly server-side.
 
-Never prefix secrets with `NEXT_PUBLIC_`.
+Never prefix secrets with \`NEXT_PUBLIC_\`.
 
-```env
+\`\`\`env
 # .env.local - SERVER ONLY (Secure)
 # Example placeholders — do NOT commit real secrets
 ANTHROPIC_API_KEY=[REDACTED_ANTHROPIC_API_KEY]
 DATABASE_URL=postgresql://user:password@db.internal:5432/appdb
-```
+\`\`\`
 
 Here is a secure server action example:
 
@@ -261,5 +261,107 @@ export function sliceConversationByDate(messages: UnifiedMessage[], targetDate: 
       ]
     },
     'claude_share_link'
+  ),
+
+  parseClaudeConversationObject(
+    {
+      uuid: 'conv_sample_004_date_range_demo',
+      name: 'Full Stack App Development & Deployment Log',
+      created_at: '2026-08-15T08:00:00Z',
+      updated_at: '2026-09-02T19:30:00Z',
+      model: 'Claude 3.5 Sonnet',
+      chat_messages: [
+        {
+          uuid: 'msg_aug15_1',
+          sender: 'human',
+          created_at: '2026-08-15T08:00:00Z',
+          text: 'Let us initialize our new Next.js 15 project with Tailwind CSS and IndexedDB support.'
+        },
+        {
+          uuid: 'msg_aug15_2',
+          sender: 'assistant',
+          created_at: '2026-08-15T08:05:00Z',
+          text: 'Project initialized on **15-Aug-2026**. Configured Dexie.js for IndexedDB and Tailwind CSS theme system.'
+        },
+        {
+          uuid: 'msg_aug20_1',
+          sender: 'human',
+          created_at: '2026-08-20T10:15:00Z',
+          text: 'How should we handle selective slicing by date range?'
+        },
+        {
+          uuid: 'msg_aug20_2',
+          sender: 'assistant',
+          created_at: '2026-08-20T10:20:00Z',
+          text: 'Created `filterMessagesBySelection()` on **20-Aug-2026** supporting startDate and endDate filtering.'
+        },
+        {
+          uuid: 'msg_aug28_1',
+          sender: 'human',
+          created_at: '2026-08-28T14:00:00Z',
+          text: 'Let us verify redaction rules for JWT tokens and secret credentials.'
+        },
+        {
+          uuid: 'msg_aug28_2',
+          sender: 'assistant',
+          created_at: '2026-08-28T14:10:00Z',
+          text: 'Redaction engine rules updated on **28-Aug-2026**. Tested with sample API keys and secret bearer tokens.'
+        },
+        {
+          uuid: 'msg_sep02_1',
+          sender: 'human',
+          created_at: '2026-09-02T19:25:00Z',
+          text: 'Final check before creating our share link preview. Everything is ready!'
+        },
+        {
+          uuid: 'msg_sep02_2',
+          sender: 'assistant',
+          created_at: '2026-09-02T19:30:00Z',
+          text: 'Completed testing on **02-Sep-2026**. Full date span available: **15-Aug-2026 → 02-Sep-2026**.'
+        }
+      ]
+    },
+    'claude_zip'
+  ),
+
+  parseClaudeConversationObject(
+    {
+      uuid: 'conv_sample_005_cpu_scheduling',
+      name: 'Operating System CPU Scheduling Assignment',
+      created_at: '2026-08-24T18:46:00Z',
+      updated_at: '2026-08-24T18:47:00Z',
+      model: 'Claude 3.5 Sonnet',
+      chat_messages: [
+        {
+          uuid: 'msg_aug24_user',
+          sender: 'human',
+          created_at: 'Aug 24, 2026, 6:46 PM',
+          text: 'complete the assignment and also fulfill all the needs of the question',
+          attachments: [
+            {
+              id: 'att_pdf_1',
+              file_name: 'Assignment 3.pdf',
+              file_size: 245000,
+              file_type: 'application/pdf'
+            }
+          ]
+        },
+        {
+          uuid: 'msg_aug24_claude',
+          sender: 'assistant',
+          created_at: 'Aug 24, 2026, 6:47 PM',
+          text: `### Summary Table
+
+| Algorithm | Avg TAT | Avg WT |
+|---|---|---|
+| Round Robin (Q=1) | 9.20 | 5.40 |
+| SJF (Non-Preemptive) | 6.20 | 3.20 |
+| SRTF (Preemptive) | 6.00 | 3.00 |
+
+SRTF gives the **minimum average waiting time** among all scheduling algorithms, which is considered optimal for minimizing average WT.`
+        }
+      ]
+    },
+    'browser_extension'
   )
 ];
