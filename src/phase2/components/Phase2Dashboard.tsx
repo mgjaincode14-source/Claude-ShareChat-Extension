@@ -7,6 +7,7 @@ import { getAllConversations, saveConversations } from '@/phase1/db';
 import { SAMPLE_CLAUDE_CONVERSATIONS } from '@/phase1/sampleData';
 import { ConversationList } from '@/phase1/components/ConversationList';
 import { RawJsonModal } from '@/phase1/components/RawJsonModal';
+import { ImportModal } from '@/phase1/components/ImportModal';
 import { SelectionOptions, SelectionSummary } from '../types';
 import { getSelectionSummary, getDateBoundaries, filterMessagesBySelection } from '../engine';
 import { SelectionToolbar } from './SelectionToolbar';
@@ -194,6 +195,18 @@ export const Phase2Dashboard: React.FC = () => {
     });
   };
 
+  const [isImportOpen, setIsImportOpen] = useState(false);
+
+  const handleImportSuccess = async (imported: UnifiedConversation[]) => {
+    await saveConversations(imported);
+    const data = await getAllConversations();
+    setConversations(data);
+    if (imported.length > 0) {
+      handleSelectConversation(imported[0].id);
+    }
+    setIsImportOpen(false);
+  };
+
   const summary: SelectionSummary = getSelectionSummary(currentConversation, selectionOptions);
 
   return (
@@ -217,8 +230,15 @@ export const Phase2Dashboard: React.FC = () => {
             </Link>
             <span className="px-2.5 py-1 bg-amber-600 text-white font-medium rounded text-xs shadow-sm flex items-center space-x-1">
               <ListFilter className="w-3 h-3" />
-              <span>Phase 2: Selective Engine</span>
+              <span>Phase 2: Selection</span>
             </span>
+            <Link
+              href="/phase3"
+              className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
+            >
+              <ShieldCheck className="w-3 h-3" />
+              <span>Phase 3: Export & Redaction</span>
+            </Link>
           </div>
         </div>
 
@@ -242,7 +262,7 @@ export const Phase2Dashboard: React.FC = () => {
             setConversations(updated);
             if (selectedId === id) setSelectedId(updated.length > 0 ? updated[0].id : null);
           }}
-          onOpenImport={() => {}}
+          onOpenImport={() => setIsImportOpen(true)}
           onLoadSamples={async () => {
             setConversations(SAMPLE_CLAUDE_CONVERSATIONS);
             if (SAMPLE_CLAUDE_CONVERSATIONS.length > 0) setSelectedId(SAMPLE_CLAUDE_CONVERSATIONS[0].id);
@@ -274,6 +294,12 @@ export const Phase2Dashboard: React.FC = () => {
           />
         </div>
       </div>
+
+      <ImportModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onImportSuccess={handleImportSuccess}
+      />
 
       <RawJsonModal
         isOpen={isRawJsonOpen}

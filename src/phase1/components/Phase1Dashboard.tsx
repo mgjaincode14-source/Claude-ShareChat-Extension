@@ -163,7 +163,14 @@ export const Phase1Dashboard: React.FC = () => {
               className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
             >
               <ListFilter className="w-3 h-3" />
-              <span>Phase 2: Selective Engine</span>
+              <span>Phase 2: Selection</span>
+            </Link>
+            <Link
+              href="/phase3"
+              className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
+            >
+              <ShieldCheck className="w-3 h-3" />
+              <span>Phase 3: Export & Redaction</span>
             </Link>
           </div>
         </div>

@@ -1,10 +1,15 @@
 import JSZip from 'jszip';
 import { UnifiedConversation, UnifiedMessage, ImportResult, FileAttachment } from './types';
 
-function formatDateISO(dateInput: string | Date | undefined): { iso: string; dateStr: string; timeStr: string } {
+function formatDateISO(dateInput: string | number | Date | undefined): { iso: string; dateStr: string; timeStr: string } {
   try {
     if (!dateInput) throw new Error('Empty date');
-    let d = new Date(dateInput);
+    let d: Date;
+    if (typeof dateInput === 'number') {
+      d = new Date(dateInput > 1e11 ? dateInput : dateInput * 1000);
+    } else {
+      d = new Date(dateInput);
+    }
 
     // If parsing failed, check for custom formats like "15-Aug-2026", "2-Sep-2026", "Aug 19", "Aug 24, 2026, 6:46 PM"
     if (isNaN(d.getTime()) && typeof dateInput === 'string') {
@@ -45,6 +50,8 @@ function formatDateISO(dateInput: string | Date | undefined): { iso: string; dat
 function extractTextFromContent(msg: any): string {
   if (typeof msg.text === 'string') return msg.text;
   if (typeof msg.content === 'string') return msg.content;
+  if (typeof msg.body === 'string') return msg.body;
+  if (typeof msg.message === 'string') return msg.message;
   
   if (Array.isArray(msg.content)) {
     return msg.content
@@ -80,8 +87,11 @@ export function parseClaudeConversationObject(
   const id = raw.uuid || raw.id || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const title = raw.name || raw.title || 'Untitled Conversation';
   
-  const createdDate = formatDateISO(raw.created_at || raw.createdAt);
-  const updatedDate = formatDateISO(raw.updated_at || raw.updatedAt || raw.created_at);
+  const convCreatedAt = raw.created_at || raw.createdAt || raw.inserted_at || raw.date;
+  const convUpdatedAt = raw.updated_at || raw.updatedAt || convCreatedAt;
+
+  const createdDate = formatDateISO(convCreatedAt);
+  const updatedDate = formatDateISO(convUpdatedAt);
 
   const rawMessages: any[] = raw.chat_messages || raw.messages || [];
   
@@ -96,19 +106,16 @@ export function parseClaudeConversationObject(
     if (sender === 'assistant') assistantCount++;
 
     const textContent = extractTextFromContent(m);
-    let msgDate = formatDateISO(m.created_at || m.timestamp);
-    if (!msgDate.dateStr && raw.created_at) {
-      const rawDate = formatDateISO(raw.created_at);
-      if (rawDate.dateStr) {
-        msgDate = rawDate;
-      }
-    }
-    if (!msgDate.dateStr) {
-      msgDate = {
-        iso: new Date().toISOString(),
-        dateStr: 'Original Chat Date',
-        timeStr: ''
-      };
+    
+    // Check all potential date property names on message object m
+    const rawMsgDate = m.created_at || m.createdAt || m.inserted_at || m.timestamp || m.date || m.time || m.updated_at;
+    let msgDate = formatDateISO(rawMsgDate);
+
+    // Fall back to conversation root dates if individual message lacks a timestamp
+    if (!msgDate.dateStr && createdDate.dateStr) {
+      msgDate = createdDate;
+    } else if (!msgDate.dateStr && updatedDate.dateStr) {
+      msgDate = updatedDate;
     }
 
     const rawAttachments = m.attachments || m.files || [];
@@ -148,36 +155,18 @@ export function parseClaudeConversationObject(
     return tA - tB;
   });
 
-  // Check if any message provided explicit timestamp/created_at
-  const hasExplicitMessageTimestamps = rawMessages.some((m: any) => !!(m.created_at || m.timestamp));
-  const uniqueDates = new Set(messages.map((m) => m.dateString));
-
-  // ONLY distribute timestamps artificially IF NO explicit message timestamps were provided AND source is ZIP export
-  if (!hasExplicitMessageTimestamps && uniqueDates.size === 1 && messages.length > 2 && source === 'claude_zip') {
-    const baseDate = raw.created_at ? new Date(raw.created_at) : new Date();
-    const daysSpan = Math.min(14, Math.ceil(messages.length / 3));
-    const startMs = baseDate.getTime() - daysSpan * 24 * 60 * 60 * 1000;
-
-    messages.forEach((msg, idx) => {
-      const msgTime = new Date(startMs + (idx / messages.length) * daysSpan * 24 * 60 * 60 * 1000);
-      const dIso = formatDateISO(msgTime);
-      msg.timestamp = dIso.iso;
-      msg.dateString = dIso.dateStr;
-      msg.timeString = dIso.timeStr;
-    });
-  }
-
-  const dates = messages.map((m) => m.dateString).filter(Boolean);
-  const startDate = dates.length > 0 ? dates[0] : createdDate.dateStr;
-  const endDate = dates.length > 0 ? dates[dates.length - 1] : updatedDate.dateStr;
+  // Calculate exact start date (first message) and end date (last message)
+  const validMessageDates = messages.map((m) => m.dateString).filter(Boolean);
+  const startDate = validMessageDates.length > 0 ? validMessageDates[0] : createdDate.dateStr;
+  const endDate = validMessageDates.length > 0 ? validMessageDates[validMessageDates.length - 1] : updatedDate.dateStr;
 
   return {
     id,
     uuid: id,
     title,
-    createdAt: createdDate.iso,
-    updatedAt: updatedDate.iso,
-    createdDateString: createdDate.dateStr,
+    createdAt: createdDate.iso || (messages[0]?.timestamp) || new Date().toISOString(),
+    updatedAt: updatedDate.iso || (messages[messages.length - 1]?.timestamp) || new Date().toISOString(),
+    createdDateString: startDate || createdDate.dateStr,
     messages,
     metadata: {
       model: raw.model || 'Claude',
@@ -396,4 +385,3 @@ export function parseClaudeShareLinkPayload(rawPayload: any, shareUrl: string): 
     };
   }
 }
-

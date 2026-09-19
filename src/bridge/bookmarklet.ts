@@ -5,7 +5,7 @@
  * page (same-origin, so the browser sends session cookies automatically). That
  * API returns the FULL message tree with the REAL per-message created_at
  * timestamp for every message, regardless of scroll position or hover state -
- * the same shape as the official data export, which parser.ts already handles.
+ * the same shape as the official data export, which parser.ts handles.
  */
 
 export const BOOKMARKLET_HREF = `javascript:${encodeURIComponent(`(async function(){
@@ -31,13 +31,28 @@ export const BOOKMARKLET_HREF = `javascript:${encodeURIComponent(`(async functio
     var conversationId = convMatch[0];
 
     // 3. Fetch the FULL conversation with REAL per-message timestamps directly from Claude's API
-    var apiUrl = 'https://claude.ai/api/organizations/' + orgId + '/chat_conversations/' + conversationId +
-                 '?tree=True&rendering_mode=messages&render_all_tools=true';
-    var convRes = await fetch(apiUrl, { credentials: 'include' });
-    if (!convRes.ok) throw new Error('Claude API request failed (status ' + convRes.status + '). Try refreshing the page and running again.');
-    var rawConversation = await convRes.json();
+    var apiUrl1 = 'https://claude.ai/api/organizations/' + orgId + '/chat_conversations/' + conversationId +
+                  '?tree=True&rendering_mode=messages&render_all_tools=true';
+    var apiUrl2 = 'https://claude.ai/api/organizations/' + orgId + '/chat_conversations/' + conversationId;
 
-    var msgCount = (rawConversation.chat_messages || rawConversation.messages || []).length;
+    var convRes = await fetch(apiUrl1, { credentials: 'include' });
+    if (!convRes.ok) {
+      convRes = await fetch(apiUrl2, { credentials: 'include' });
+    }
+    if (!convRes.ok) throw new Error('Claude API request failed (status ' + convRes.status + '). Try refreshing the page and running again.');
+    
+    var rawConversation = await convRes.json();
+    var msgs = rawConversation.chat_messages || rawConversation.messages || [];
+    var msgCount = msgs.length;
+
+    console.log('[Claude Bridge Import] Status:', convRes.status);
+    console.log('[Claude Bridge Import] Top-level keys:', Object.keys(rawConversation));
+    console.log('[Claude Bridge Import] Message count:', msgCount);
+    if (msgCount > 0) {
+      console.log('[Claude Bridge Import] First message:', msgs[0]);
+      console.log('[Claude Bridge Import] Last message:', msgs[msgCount - 1]);
+    }
+
     if (msgCount === 0) throw new Error('No messages found in API response - conversation may still be loading.');
 
     // 4. Send the raw, real conversation payload to the bridge

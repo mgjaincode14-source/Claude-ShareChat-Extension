@@ -140,7 +140,11 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 <div className="flex items-center space-x-2 mt-2 text-[11px] text-slate-500">
                   <span className="flex items-center space-x-1">
                     <Calendar className="w-3 h-3 text-slate-600" />
-                    <span>{conv.createdDateString}</span>
+                    <span>
+                      {conv.metadata?.dateRange?.start && conv.metadata?.dateRange?.end && conv.metadata.dateRange.start !== conv.metadata.dateRange.end
+                        ? `${conv.metadata.dateRange.start} → ${conv.metadata.dateRange.end}`
+                        : conv.metadata?.dateRange?.start || conv.createdDateString}
+                    </span>
                   </span>
                   <span>•</span>
                   <span className="flex items-center space-x-1">
