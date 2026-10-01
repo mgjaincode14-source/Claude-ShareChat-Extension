@@ -148,7 +148,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
         {/* Date Range Mode Sub-control */}
         {options.mode === 'date_range' && (
           <div className="flex flex-wrap items-center gap-3">
-            {/* From Date Selection */}
+            {/* From Date */}
             <div className="flex items-center space-x-2">
               <span className="text-slate-400 font-medium">From:</span>
               <select
@@ -162,17 +162,9 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
                   </option>
                 ))}
               </select>
-              <input
-                type="date"
-                min={minDate}
-                max={maxDate}
-                value={activeStartDate}
-                onChange={(e) => onChangeOptions({ ...options, startDate: e.target.value })}
-                className="bg-slate-950 border border-slate-800 text-amber-300 rounded-lg px-2 py-1 focus:outline-none focus:border-amber-500 font-mono text-xs"
-              />
             </div>
 
-            {/* To Date Selection */}
+            {/* To Date */}
             <div className="flex items-center space-x-2">
               <span className="text-slate-400 font-medium">To:</span>
               <select
@@ -186,14 +178,6 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
                   </option>
                 ))}
               </select>
-              <input
-                type="date"
-                min={minDate}
-                max={maxDate}
-                value={activeEndDate}
-                onChange={(e) => onChangeOptions({ ...options, endDate: e.target.value })}
-                className="bg-slate-950 border border-slate-800 text-amber-300 rounded-lg px-2 py-1 focus:outline-none focus:border-amber-500 font-mono text-xs"
-              />
             </div>
 
             {/* Quick Range Presets */}

@@ -20,8 +20,11 @@ import {
   Sparkles, 
   ArrowLeft, 
   ShieldCheck,
-  Eye
+  Eye,
+  BarChart2,
+  Share2
 } from 'lucide-react';
+import { readSession, writeSession } from '@/store/workflowSession';
 
 export const Phase2Dashboard: React.FC = () => {
   const [conversations, setConversations] = useState<UnifiedConversation[]>([]);
@@ -69,21 +72,29 @@ export const Phase2Dashboard: React.FC = () => {
     }
     setConversations(data);
 
-    if (latestBridgedId) {
-      setSelectedId(latestBridgedId);
-      const target = data.find((c) => c.id === latestBridgedId);
+    // Restore session — priority: fresh bridge import > session store > first conv
+    const session = readSession();
+    const restoredId = latestBridgedId || session.selectedConvId || (data[0]?.id ?? null);
+
+    if (restoredId) {
+      setSelectedId(restoredId);
+      const target = data.find((c) => c.id === restoredId);
       if (target) {
         const { minDate, maxDate } = getDateBoundaries(target);
-        setSelectionOptions((prev) => ({
-          ...prev,
-          startDate: minDate,
-          endDate: maxDate,
-          selectedDate: minDate,
-          selectedMessageIds: target.messages.map((m) => m.id)
-        }));
+        // If session has meaningful filter options, restore them; otherwise use defaults
+        const restoredOpts = session.selectionOptions?.selectedMessageIds?.length
+          ? session.selectionOptions
+          : {
+              mode: 'all' as const,
+              startDate: minDate,
+              endDate: maxDate,
+              selectedDate: minDate,
+              selectedMessageIds: target.messages.map((m) => m.id),
+              includePrecedingContext: true,
+              contextDepth: 1,
+            };
+        setSelectionOptions(restoredOpts);
       }
-    } else if (data.length > 0) {
-      setSelectedId((prev) => prev || data[0].id);
     }
   }, [checkForBridgedImports]);
 
@@ -117,18 +128,21 @@ export const Phase2Dashboard: React.FC = () => {
   // When switching conversations, reset selected IDs and sync date bounds
   const handleSelectConversation = (id: string) => {
     setSelectedId(id);
+    writeSession({ selectedConvId: id });
     const target = conversations.find((c) => c.id === id);
     if (target) {
       const { minDate, maxDate } = getDateBoundaries(target);
-      setSelectionOptions({
-        mode: 'all',
+      const opts = {
+        mode: 'all' as const,
         startDate: minDate,
         endDate: maxDate,
         selectedDate: minDate,
         selectedMessageIds: target.messages.map((m) => m.id),
         includePrecedingContext: true,
         contextDepth: 1
-      });
+      };
+      setSelectionOptions(opts);
+      writeSession({ selectionOptions: opts });
     }
   };
 
@@ -197,6 +211,11 @@ export const Phase2Dashboard: React.FC = () => {
 
   const [isImportOpen, setIsImportOpen] = useState(false);
 
+  // Write selectionOptions to session whenever they change
+  useEffect(() => {
+    writeSession({ selectionOptions });
+  }, [selectionOptions]);
+
   const handleImportSuccess = async (imported: UnifiedConversation[]) => {
     await saveConversations(imported);
     const data = await getAllConversations();
@@ -216,7 +235,7 @@ export const Phase2Dashboard: React.FC = () => {
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 font-semibold">
             <ListFilter className="w-3.5 h-3.5" />
-            <span>Phase 2 — Selective Conversation Engine</span>
+            <span>Message Filter</span>
           </div>
 
           {/* Phase Navigation Tabs */}
@@ -226,18 +245,32 @@ export const Phase2Dashboard: React.FC = () => {
               className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
             >
               <Layers className="w-3 h-3" />
-              <span>Phase 1: Reader</span>
+              <span>Conversation Reader</span>
             </Link>
             <span className="px-2.5 py-1 bg-amber-600 text-white font-medium rounded text-xs shadow-sm flex items-center space-x-1">
               <ListFilter className="w-3 h-3" />
-              <span>Phase 2: Selection</span>
+              <span>Message Filter</span>
             </span>
             <Link
               href="/phase3"
               className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
             >
               <ShieldCheck className="w-3 h-3" />
-              <span>Phase 3: Export & Redaction</span>
+              <span>Privacy & Export</span>
+            </Link>
+            <Link
+              href="/phase4"
+              className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
+            >
+              <Share2 className="w-3 h-3" />
+              <span>Share Link Generator</span>
+            </Link>
+            <Link
+              href="/phase5"
+              className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
+            >
+              <BarChart2 className="w-3 h-3" />
+              <span>Analytics</span>
             </Link>
           </div>
         </div>

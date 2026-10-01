@@ -25,8 +25,12 @@ import { ExportPreviewer } from './ExportPreviewer';
 import { 
   ShieldCheck, 
   Sparkles, 
-  Layers
+  Layers,
+  ListFilter,
+  Share2,
+  BarChart2
 } from 'lucide-react';
+import { readSession, writeSession } from '@/store/workflowSession';
 
 export const Phase3Dashboard: React.FC = () => {
   const [conversations, setConversations] = useState<UnifiedConversation[]>([]);
@@ -67,7 +71,7 @@ export const Phase3Dashboard: React.FC = () => {
     watermarkText: 'Shared via Claude Selective Share'
   });
 
-  // Load conversations from IndexedDB
+  // Load conversations and restore session state
   useEffect(() => {
     async function loadData() {
       try {
@@ -77,16 +81,32 @@ export const Phase3Dashboard: React.FC = () => {
           stored = SAMPLE_CLAUDE_CONVERSATIONS;
         }
         setConversations(stored);
-        if (stored.length > 0) {
-          setSelectedId(stored[0].id);
-          const bounds = getDateBoundaries(stored[0]);
-          setSelectionOptions((prev) => ({
-            ...prev,
-            startDate: bounds.minDate,
-            endDate: bounds.maxDate,
-            selectedDate: bounds.maxDate,
-            selectedMessageIds: stored[0].messages.map((m) => m.id)
-          }));
+
+        // Restore from session
+        const session = readSession();
+        const restoredId = session.selectedConvId || stored[0]?.id || null;
+        if (restoredId) {
+          setSelectedId(restoredId);
+          const conv = stored.find((c) => c.id === restoredId);
+          if (conv) {
+            // Restore selection options from session if they have content
+            if (session.selectionOptions?.selectedMessageIds?.length) {
+              setSelectionOptions(session.selectionOptions);
+            } else {
+              const bounds = getDateBoundaries(conv);
+              setSelectionOptions((prev) => ({
+                ...prev,
+                startDate: bounds.minDate,
+                endDate: bounds.maxDate,
+                selectedDate: bounds.maxDate,
+                selectedMessageIds: conv.messages.map((m) => m.id)
+              }));
+            }
+          }
+        }
+        // Restore redaction options from session
+        if (session.redactionOptions) {
+          setRedactionOptions(session.redactionOptions);
         }
       } catch (err) {
         console.error('Failed loading conversations:', err);
@@ -101,18 +121,27 @@ export const Phase3Dashboard: React.FC = () => {
 
   const handleSelectConversation = (id: string) => {
     setSelectedId(id);
+    writeSession({ selectedConvId: id });
     const conv = conversations.find((c) => c.id === id);
     if (conv) {
       const bounds = getDateBoundaries(conv);
-      setSelectionOptions((prev) => ({
-        ...prev,
+      const opts = {
+        ...selectionOptions,
         startDate: bounds.minDate,
         endDate: bounds.maxDate,
         selectedDate: bounds.maxDate,
         selectedMessageIds: conv.messages.map((m) => m.id)
-      }));
+      };
+      setSelectionOptions(opts);
+      writeSession({ selectionOptions: opts });
     }
   };
+
+  // Write redactionOptions to session whenever they change
+  useEffect(() => {
+    writeSession({ redactionOptions });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [redactionOptions]);
 
   const handleDeleteConversation = async (id: string) => {
     await deleteConversation(id);
@@ -248,7 +277,7 @@ export const Phase3Dashboard: React.FC = () => {
       <div className="h-screen bg-slate-950 flex items-center justify-center text-slate-400">
         <div className="flex items-center space-x-2">
           <Sparkles className="w-5 h-5 text-amber-500 animate-spin" />
-          <span>Loading Phase 3 Export & Redaction Suite...</span>
+          <span>Loading Privacy & Export...</span>
         </div>
       </div>
     );
@@ -264,9 +293,9 @@ export const Phase3Dashboard: React.FC = () => {
           </div>
           <div>
             <h1 className="font-bold text-sm text-slate-100 leading-tight">
-              Claude Selective Share — Phase 3
+              Privacy & Export
             </h1>
-            <p className="text-[11px] text-slate-400">Export, Privacy Sanitization & Redaction Engine</p>
+            <p className="text-[11px] text-slate-400">Redact sensitive data and export your filtered conversation</p>
           </div>
         </div>
 
@@ -276,18 +305,34 @@ export const Phase3Dashboard: React.FC = () => {
             href="/phase1"
             className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors flex items-center space-x-1"
           >
-            <span>Phase 1: Import</span>
+            <Layers className="w-3 h-3" />
+            <span>Conversation Reader</span>
           </Link>
           <Link
             href="/phase2"
             className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors flex items-center space-x-1"
           >
-            <span>Phase 2: Selection</span>
+            <ListFilter className="w-3 h-3" />
+            <span>Message Filter</span>
           </Link>
           <span className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-medium shadow-sm flex items-center space-x-1">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />
-            <span>Phase 3: Export & Redaction</span>
+            <span>Privacy & Export</span>
           </span>
+          <Link
+            href="/phase4"
+            className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors flex items-center space-x-1"
+          >
+            <Share2 className="w-3 h-3" />
+            <span>Share Link Generator</span>
+          </Link>
+          <Link
+            href="/phase5"
+            className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors flex items-center space-x-1"
+          >
+            <BarChart2 className="w-3 h-3" />
+            <span>Analytics</span>
+          </Link>
         </div>
       </header>
 
