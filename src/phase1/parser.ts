@@ -48,25 +48,37 @@ function formatDateISO(dateInput: string | number | Date | undefined): { iso: st
 }
 
 function extractTextFromContent(msg: any): string {
-  if (typeof msg.text === 'string') return msg.text;
-  if (typeof msg.content === 'string') return msg.content;
-  if (typeof msg.body === 'string') return msg.body;
-  if (typeof msg.message === 'string') return msg.message;
-  
-  if (Array.isArray(msg.content)) {
-    return msg.content
+  // If structured content blocks exist, prioritize genuine text blocks
+  if (Array.isArray(msg.content) && msg.content.length > 0) {
+    const textPieces = msg.content
       .map((block: any) => {
         if (typeof block === 'string') return block;
         if (block?.type === 'text' && block?.text) return block.text;
         if (block?.text) return block.text;
         return '';
       })
-      .filter(Boolean)
-      .join('\n\n');
+      .filter(Boolean);
+
+    if (textPieces.length > 0) {
+      return textPieces.join('\n\n').trim();
+    }
   }
 
-  if (Array.isArray(msg.text)) {
-    return msg.text.join('\n\n');
+  if (Array.isArray(msg.text) && msg.text.length > 0) {
+    return msg.text.join('\n\n').trim();
+  }
+
+  let raw = '';
+  if (typeof msg.content === 'string') raw = msg.content;
+  else if (typeof msg.text === 'string') raw = msg.text;
+  else if (typeof msg.body === 'string') raw = msg.body;
+  else if (typeof msg.message === 'string') raw = msg.message;
+
+  if (raw) {
+    return raw
+      .replace(/(?:```[\s\S]*?This block is not supported on your current device yet\.?[\s\S]*?```[\r\n]*)+/gi, '\n\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   return '';

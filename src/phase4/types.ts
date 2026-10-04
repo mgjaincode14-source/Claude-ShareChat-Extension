@@ -30,6 +30,16 @@ export interface SharedSnapshot {
     viewsCount: number;
     passcode?: string;
     expiresAt?: string;
+    /** Date range of the selected/filtered messages (may differ from full conversation span) */
+    filteredDateRange?: {
+      start: string;
+      end: string;
+    };
+    /** Full conversation date span (all messages, unfiltered) */
+    fullConversationDateRange?: {
+      start: string;
+      end: string;
+    };
   };
 }
 

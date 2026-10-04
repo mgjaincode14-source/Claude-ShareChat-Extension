@@ -12,7 +12,8 @@ import {
   Globe, 
   FileText, 
   SlidersHorizontal,
-  Sparkles
+  Sparkles,
+  Cpu
 } from 'lucide-react';
 
 interface ExportOptionsToolbarProps {
@@ -117,10 +118,10 @@ export const ExportOptionsToolbar: React.FC<ExportOptionsToolbarProps> = ({
       </div>
 
       {/* Formatting & Watermark Customization Controls */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-800/80 text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-800/80 text-xs">
         {/* Toggle Metadata Header */}
         <label className="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-xl border border-slate-800/80 cursor-pointer hover:border-slate-700">
-          <span className="text-slate-300 font-medium">Include Metadata Header</span>
+          <span className="text-slate-300 font-medium">Metadata Header</span>
           <input
             type="checkbox"
             checked={options.includeMetadataHeader}
@@ -131,11 +132,25 @@ export const ExportOptionsToolbar: React.FC<ExportOptionsToolbarProps> = ({
 
         {/* Toggle Timestamps */}
         <label className="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-xl border border-slate-800/80 cursor-pointer hover:border-slate-700">
-          <span className="text-slate-300 font-medium">Include Timestamps</span>
+          <span className="text-slate-300 font-medium">Timestamps</span>
           <input
             type="checkbox"
             checked={options.includeTimestamp}
             onChange={(e) => onChangeOptions({ ...options, includeTimestamp: e.target.checked })}
+            className="accent-amber-500 w-4 h-4 rounded cursor-pointer"
+          />
+        </label>
+
+        {/* Toggle Sandbox Steps (Option 4) */}
+        <label className="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-xl border border-slate-800/80 cursor-pointer hover:border-slate-700">
+          <span className="text-slate-300 font-medium flex items-center space-x-1.5">
+            <Cpu className="w-3.5 h-3.5 text-amber-400" />
+            <span>Sandbox Activity</span>
+          </span>
+          <input
+            type="checkbox"
+            checked={Boolean(options.includeSandboxSteps)}
+            onChange={(e) => onChangeOptions({ ...options, includeSandboxSteps: e.target.checked })}
             className="accent-amber-500 w-4 h-4 rounded cursor-pointer"
           />
         </label>
@@ -146,7 +161,7 @@ export const ExportOptionsToolbar: React.FC<ExportOptionsToolbarProps> = ({
             type="text"
             value={options.watermarkText}
             onChange={(e) => onChangeOptions({ ...options, watermarkText: e.target.value })}
-            placeholder="Watermark / Branding text..."
+            placeholder="Watermark text..."
             className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:border-amber-500/60"
           />
         </div>

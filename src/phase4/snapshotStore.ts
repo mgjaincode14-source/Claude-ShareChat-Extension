@@ -21,7 +21,8 @@ export function createSnapshotObject(
     watermarkText?: string;
     passcode?: string;
     expiresAt?: string;
-  }
+  },
+  fullConvDateRange?: { start: string; end: string }
 ): SharedSnapshot {
   const now = new Date();
   const shortCode = customOptions?.customSlug || generateShortCode();
@@ -70,7 +71,11 @@ export function createSnapshotObject(
       customSlug: customOptions?.customSlug || undefined,
       viewsCount: 0,
       passcode: customOptions?.passcode || undefined,
-      expiresAt: customOptions?.expiresAt || undefined
+      expiresAt: customOptions?.expiresAt || undefined,
+      // Filtered date range = actual dates of the selected messages
+      filteredDateRange: { start: startDate, end: endDate },
+      // Full conversation span (passed in from the dashboard)
+      fullConversationDateRange: fullConvDateRange || undefined,
     }
   };
 }

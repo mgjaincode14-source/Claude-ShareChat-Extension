@@ -20,6 +20,7 @@ export interface ExportOptions {
   includeMetadataHeader: boolean;
   includeTimestamp: boolean;
   watermarkText: string;
+  includeSandboxSteps?: boolean;
 }
 
 export interface RedactionStats {

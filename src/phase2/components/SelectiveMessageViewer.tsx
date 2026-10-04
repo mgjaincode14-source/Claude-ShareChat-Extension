@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { UnifiedConversation, UnifiedMessage } from '@/phase1/types';
 import { SelectionOptions } from '../types';
 import { filterMessagesBySelection } from '../engine';
+import { processSandboxContent } from '@/phase3/exportEngine';
 import { 
   Bot, 
   User, 
@@ -69,14 +70,62 @@ function formatBadgeDate(dateStr: string): string {
   }
 }
 
+const CodeBlockItem: React.FC<any> = ({ node, inline, className, children, ...props }) => {
+  const [copied, setCopied] = useState(false);
+  const match = /language-(\w+)/.exec(className || '');
+  const codeString = String(children).replace(/\n$/, '');
+  const isInline = inline || (!match && !codeString.includes('\n'));
+
+  if (isInline) {
+    return (
+      <code className="bg-slate-800/80 text-amber-300 px-1.5 py-0.5 rounded text-xs font-mono" {...props}>
+        {children}
+      </code>
+    );
+  }
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(codeString);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="relative group/code my-3 rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/80 border-b border-slate-800 text-xs text-slate-400 font-mono">
+        <span>{match ? match[1] : 'code'}</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex items-center space-x-1 text-slate-400 hover:text-amber-300 transition-colors"
+        >
+          {copied ? (
+            <>
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-emerald-400">Copied!</span>
+            </>
+          ) : (
+            <>
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      <pre className="p-3 overflow-x-auto text-xs text-slate-200 font-mono leading-relaxed">
+        <code>{children}</code>
+      </pre>
+    </div>
+  );
+};
+
 export const SelectiveMessageViewer: React.FC<SelectiveMessageViewerProps> = ({
   conversation,
   options,
   onToggleMessageId,
   onOpenRawJson
 }) => {
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-
   if (!conversation) return null;
 
   // Filter messages using our engine
@@ -89,12 +138,6 @@ export const SelectiveMessageViewer: React.FC<SelectiveMessageViewerProps> = ({
     includePrecedingContext: false
   });
   const baseSelectedIdSet = new Set(baseSelectedMessages.map((m) => m.id));
-
-  const handleCopyCode = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
 
   // Compute stats for header bar
   const userCount = selectedMessages.filter((m) => m.sender === 'user').length;
@@ -272,49 +315,10 @@ export const SelectiveMessageViewer: React.FC<SelectiveMessageViewerProps> = ({
                         p({ children }: any) {
                           return <p className="mb-3 leading-relaxed text-slate-200 last:mb-0">{children}</p>;
                         },
-                        code({ node, inline, className, children, ...props }: any) {
-                          const match = /language-(\w+)/.exec(className || '');
-                          const codeString = String(children).replace(/\n$/, '');
-                          const isInline = inline || (!match && !codeString.includes('\n'));
-
-                          return !isInline ? (
-                            <div className="relative group/code my-3 rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
-                              <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/80 border-b border-slate-800 text-xs text-slate-400 font-mono">
-                                <span>{match ? match[1] : 'code'}</span>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleCopyCode(codeString, `${msg.id}_${index}`);
-                                  }}
-                                  className="flex items-center space-x-1 text-slate-400 hover:text-amber-300 transition-colors"
-                                >
-                                  {copiedId === `${msg.id}_${index}` ? (
-                                    <>
-                                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                      <span className="text-emerald-400">Copied!</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy className="w-3.5 h-3.5" />
-                                      <span>Copy</span>
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                              <pre className="p-3 overflow-x-auto text-xs text-slate-200 font-mono leading-relaxed">
-                                <code>{children}</code>
-                              </pre>
-                            </div>
-                          ) : (
-                            <code className="bg-slate-800/80 text-amber-300 px-1.5 py-0.5 rounded text-xs font-mono" {...props}>
-                              {children}
-                            </code>
-                          );
-                        }
+                        code: CodeBlockItem
                       }}
                     >
-                      {msg.content}
+                      {processSandboxContent(msg.content, false, 'markdown')}
                     </ReactMarkdown>
                   </div>
                 </div>

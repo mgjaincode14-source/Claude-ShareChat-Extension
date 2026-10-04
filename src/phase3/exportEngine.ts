@@ -11,6 +11,75 @@ function getSenderLabel(sender: string, redactionOpts: RedactionOptions): string
   return sender;
 }
 
+function getMessageDateRange(messages: UnifiedMessage[]): { start: string; end: string } {
+  const dates = messages
+    .map((m) => m.dateString)
+    .filter((d): d is string => Boolean(d))
+    .sort();
+
+  if (dates.length === 0) {
+    return { start: 'N/A', end: 'N/A' };
+  }
+  return { start: dates[0], end: dates[dates.length - 1] };
+}
+
+function getFullConversationDateRange(
+  conversation: UnifiedConversation,
+  messages: UnifiedMessage[]
+): { start: string; end: string } {
+  const meta = conversation.metadata as any;
+  if (meta?.fullConversationDateRange?.start && meta?.fullConversationDateRange?.end) {
+    return meta.fullConversationDateRange;
+  }
+  if (meta?.dateRange?.start && meta?.dateRange?.end) {
+    return meta.dateRange;
+  }
+  if (conversation.messages && conversation.messages.length > 0) {
+    const dates = conversation.messages
+      .map((m) => m.dateString)
+      .filter((d): d is string => Boolean(d))
+      .sort();
+    if (dates.length > 0) {
+      return { start: dates[0], end: dates[dates.length - 1] };
+    }
+  }
+  return getMessageDateRange(messages);
+}
+
+export function processSandboxContent(
+  content: string,
+  includeSandboxSteps: boolean,
+  format: 'markdown' | 'json' | 'text' | 'html'
+): string {
+  if (!content) return '';
+
+  const UNSUPPORTED_BLOCK_REGEX = /(?:```[\s\S]*?This block is not supported on your current device yet\.?[\s\S]*?```[\r\n]*)+/gi;
+
+  if (!includeSandboxSteps) {
+    return content
+      .replace(UNSUPPORTED_BLOCK_REGEX, '\n\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  return content
+    .replace(UNSUPPORTED_BLOCK_REGEX, (match) => {
+      const matches = match.match(/This block is not supported/gi) || [];
+      const count = matches.length || 1;
+      const stepWord = count === 1 ? 'step' : 'steps';
+
+      if (format === 'html') {
+        return `\n:::SANDBOX_DETAILS_${count}:::\n`;
+      }
+      if (format === 'markdown') {
+        return `\n\n> ⚙️ **Claude Sandbox Activity** *(${count} ${stepWord})*\n\n`;
+      }
+      return `\n\n[⚙️ Claude Sandbox Activity: ${count} ${stepWord}]\n\n`;
+    })
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export function generateMarkdownExport(
   conversation: UnifiedConversation,
   messages: UnifiedMessage[],
@@ -18,17 +87,19 @@ export function generateMarkdownExport(
   redactionOpts: RedactionOptions
 ): string {
   const lines: string[] = [];
-  const startDate = conversation.metadata?.dateRange?.start || 'N/A';
-  const endDate = conversation.metadata?.dateRange?.end || 'N/A';
+  const fullDateRange = getFullConversationDateRange(conversation, messages);
+  const selectedDateRange = getMessageDateRange(messages);
 
   if (exportOpts.includeMetadataHeader) {
     lines.push(`# ${conversation.title}`);
     lines.push('');
     lines.push(`> **Exported from Claude Selective Share Tool**`);
     if (exportOpts.includeTimestamp) {
-      lines.push(`> Date Span: ${startDate} ~ ${endDate}`);
+      lines.push(`> Date Span: ${fullDateRange.start} ~ ${fullDateRange.end}`);
+      lines.push(`> Selected Date Span: ${selectedDateRange.start} ~ ${selectedDateRange.end} • ${messages.length} messages selected`);
+    } else {
+      lines.push(`> Total Selected Messages: ${messages.length}`);
     }
-    lines.push(`> Total Selected Messages: ${messages.length}`);
     if (exportOpts.watermarkText) {
       lines.push(`> ${exportOpts.watermarkText}`);
     }
@@ -40,10 +111,11 @@ export function generateMarkdownExport(
   messages.forEach((msg, index) => {
     const sender = getSenderLabel(msg.sender, redactionOpts);
     const timeInfo = exportOpts.includeTimestamp && msg.dateString ? ` *(${msg.dateString}${msg.timeString ? ' ' + msg.timeString : ''})*` : '';
+    const processedContent = processSandboxContent(msg.content, exportOpts.includeSandboxSteps || false, 'markdown');
 
     lines.push(`### ${sender}${timeInfo}`);
     lines.push('');
-    lines.push(msg.content);
+    lines.push(processedContent);
     lines.push('');
     if (index < messages.length - 1) {
       lines.push('---');
@@ -60,24 +132,33 @@ export function generateJsonExport(
   exportOpts: ExportOptions,
   redactionOpts: RedactionOptions
 ): string {
+  const fullDateRange = getFullConversationDateRange(conversation, messages);
+  const selectedDateRange = getMessageDateRange(messages);
+
   const payload = {
     title: conversation.title,
     metadata: {
       ...conversation.metadata,
+      dateSpan: `${fullDateRange.start} ~ ${fullDateRange.end}`,
+      selectedDateSpan: `${selectedDateRange.start} ~ ${selectedDateRange.end}`,
       exportedAt: new Date().toISOString(),
       watermark: exportOpts.watermarkText || undefined,
-      totalSelectedMessages: messages.length
+      totalSelectedMessages: messages.length,
+      includeSandboxSteps: Boolean(exportOpts.includeSandboxSteps)
     },
-    messages: messages.map((m) => ({
-      id: m.id,
-      sender: getSenderLabel(m.sender, redactionOpts),
-      role: m.sender,
-      content: m.content,
-      timestamp: exportOpts.includeTimestamp ? m.timestamp : undefined,
-      dateString: exportOpts.includeTimestamp ? m.dateString : undefined,
-      timeString: exportOpts.includeTimestamp ? m.timeString : undefined,
-      model: m.model
-    }))
+    messages: messages.map((m) => {
+      const processedContent = processSandboxContent(m.content, exportOpts.includeSandboxSteps || false, 'json');
+      return {
+        id: m.id,
+        sender: getSenderLabel(m.sender, redactionOpts),
+        role: m.sender,
+        content: processedContent,
+        timestamp: exportOpts.includeTimestamp ? m.timestamp : undefined,
+        dateString: exportOpts.includeTimestamp ? m.dateString : undefined,
+        timeString: exportOpts.includeTimestamp ? m.timeString : undefined,
+        model: m.model
+      };
+    })
   };
 
   return JSON.stringify(payload, null, 2);
@@ -90,13 +171,13 @@ export function generateTextExport(
   redactionOpts: RedactionOptions
 ): string {
   const lines: string[] = [];
-  const startDate = conversation.metadata?.dateRange?.start || 'N/A';
-  const endDate = conversation.metadata?.dateRange?.end || 'N/A';
+  const fullDateRange = getFullConversationDateRange(conversation, messages);
+  const selectedDateRange = getMessageDateRange(messages);
 
   if (exportOpts.includeMetadataHeader) {
     lines.push(`=== ${conversation.title.toUpperCase()} ===`);
-    lines.push(`Span: ${startDate} ~ ${endDate}`);
-    lines.push(`Messages: ${messages.length}`);
+    lines.push(`Date Span: ${fullDateRange.start} ~ ${fullDateRange.end}`);
+    lines.push(`Selected Date Span: ${selectedDateRange.start} ~ ${selectedDateRange.end} • ${messages.length} messages selected`);
     if (exportOpts.watermarkText) lines.push(exportOpts.watermarkText);
     lines.push('='.repeat(40));
     lines.push('');
@@ -105,8 +186,9 @@ export function generateTextExport(
   messages.forEach((msg) => {
     const sender = getSenderLabel(msg.sender, redactionOpts);
     const timeStr = exportOpts.includeTimestamp && msg.dateString ? ` [${msg.dateString} ${msg.timeString || ''}]` : '';
+    const processedContent = processSandboxContent(msg.content, exportOpts.includeSandboxSteps || false, 'text');
     lines.push(`[${sender.toUpperCase()}${timeStr}]`);
-    lines.push(msg.content);
+    lines.push(processedContent);
     lines.push('');
     lines.push('-'.repeat(30));
     lines.push('');
@@ -122,16 +204,25 @@ export function generateHtmlExport(
   redactionOpts: RedactionOptions
 ): string {
   const titleEscaped = conversation.title.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const startDate = conversation.metadata?.dateRange?.start || 'N/A';
-  const endDate = conversation.metadata?.dateRange?.end || 'N/A';
+  const fullDateRange = getFullConversationDateRange(conversation, messages);
+  const selectedDateRange = getMessageDateRange(messages);
 
   const messageBlocks = messages.map((msg) => {
     const sender = getSenderLabel(msg.sender, redactionOpts);
     const isUser = msg.sender === 'user';
-    const contentEscaped = msg.content
+    const processedContent = processSandboxContent(msg.content, exportOpts.includeSandboxSteps || false, 'html');
+    let contentEscaped = processedContent
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/\n/g, '<br/>');
+
+    if (exportOpts.includeSandboxSteps) {
+      contentEscaped = contentEscaped.replace(/:::SANDBOX_DETAILS_(\d+):::/g, (_, countStr) => {
+        const count = parseInt(countStr, 10) || 1;
+        const stepWord = count === 1 ? 'step' : 'steps';
+        return `<details class="sandbox-activity"><summary>⚙️ Claude Sandbox Activity (${count} ${stepWord})</summary><div class="sandbox-desc">Background operations executed in sandbox (file generation / tool execution)</div></details>`;
+      });
+    }
 
     const timeStr = exportOpts.includeTimestamp && msg.dateString ? `${msg.dateString} ${msg.timeString || ''}` : '';
 
@@ -183,13 +274,20 @@ export function generateHtmlExport(
       margin-bottom: 24px;
     }
     .header h1 {
-      margin: 0 0 8px 0;
+      margin: 0 0 10px 0;
       font-size: 20px;
       color: var(--amber);
     }
     .meta {
       font-size: 13px;
       color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .meta-selected {
+      color: var(--amber);
+      font-weight: 500;
     }
     .message-card {
       background: var(--card-bg);
@@ -228,6 +326,32 @@ export function generateHtmlExport(
       white-space: pre-wrap;
       word-break: break-word;
     }
+    .sandbox-activity {
+      margin: 12px 0;
+      padding: 8px 12px;
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 10px;
+      font-size: 12px;
+    }
+    .sandbox-activity summary {
+      cursor: pointer;
+      font-weight: 500;
+      color: var(--amber);
+      outline: none;
+      user-select: none;
+    }
+    .sandbox-activity summary:hover {
+      color: #fbbf24;
+    }
+    .sandbox-desc {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.1);
+      font-size: 11px;
+      color: var(--muted);
+      font-family: monospace;
+    }
     .footer {
       text-align: center;
       margin-top: 32px;
@@ -242,8 +366,8 @@ export function generateHtmlExport(
       <div class="header">
         <h1>${titleEscaped}</h1>
         <div class="meta">
-          <span>Date Span: ${startDate} ~ ${endDate}</span> • 
-          <span>${messages.length} messages selected</span>
+          <div>Date Span: ${fullDateRange.start} ~ ${fullDateRange.end}</div>
+          <div class="meta-selected">Selected Date Span: ${selectedDateRange.start} ~ ${selectedDateRange.end} • ${messages.length} messages selected</div>
         </div>
       </div>
     ` : ''}

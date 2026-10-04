@@ -19,18 +19,76 @@ import {
   Code,
   Layers,
   Lock,
-  ExternalLink
+  ExternalLink,
+  Cpu
 } from 'lucide-react';
-import { downloadFile, generateMarkdownExport, generateJsonExport, generateHtmlExport, generateTextExport } from '@/phase3/exportEngine';
+import { 
+  downloadFile, 
+  generateMarkdownExport, 
+  generateJsonExport, 
+  generateHtmlExport, 
+  generateTextExport,
+  processSandboxContent
+} from '@/phase3/exportEngine';
 
 interface PublicSnapshotViewerProps {
   snapshot: SharedSnapshot;
 }
 
+const CodeBlockItem: React.FC<any> = ({ node, inline, className, children, ...props }) => {
+  const [copied, setCopied] = useState(false);
+  const match = /language-(\w+)/.exec(className || '');
+  const codeString = String(children).replace(/\n$/, '');
+  const isInline = inline || (!match && !codeString.includes('\n'));
+
+  if (isInline) {
+    return (
+      <code className="bg-slate-800/80 text-amber-300 px-1.5 py-0.5 rounded text-xs font-mono" {...props}>
+        {children}
+      </code>
+    );
+  }
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(codeString);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="relative group/code my-3 rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/80 border-b border-slate-800 text-xs text-slate-400 font-mono">
+        <span>{match ? match[1] : 'code'}</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex items-center space-x-1 text-slate-400 hover:text-amber-300 transition-colors"
+        >
+          {copied ? (
+            <>
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-emerald-400">Copied!</span>
+            </>
+          ) : (
+            <>
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      <pre className="p-3 overflow-x-auto text-xs text-slate-200 font-mono leading-relaxed">
+        <code>{children}</code>
+      </pre>
+    </div>
+  );
+};
+
 export const PublicSnapshotViewer: React.FC<PublicSnapshotViewerProps> = ({ snapshot }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [senderFilter, setSenderFilter] = useState<'all' | 'user' | 'assistant'>('all');
-  const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
+  const [showSandboxActivity, setShowSandboxActivity] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
   const [passcodeInput, setPasscodeInput] = useState('');
@@ -53,12 +111,6 @@ export const PublicSnapshotViewer: React.FC<PublicSnapshotViewerProps> = ({ snap
     const matchesSearch = !searchTerm.trim() || m.content.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSender && matchesSearch;
   });
-
-  const handleCopyCode = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedCodeId(id);
-    setTimeout(() => setCopiedCodeId(null), 2000);
-  };
 
   const handleCopyShareLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -84,7 +136,8 @@ export const PublicSnapshotViewer: React.FC<PublicSnapshotViewerProps> = ({ snap
       format: fmt,
       includeMetadataHeader: true,
       includeTimestamp: true,
-      watermarkText: snapshot.metadata?.watermarkText || 'Shared via Claude Selective Share'
+      watermarkText: snapshot.metadata?.watermarkText || 'Shared via Claude Selective Share',
+      includeSandboxSteps: showSandboxActivity
     };
 
     let content = '';
@@ -161,9 +214,20 @@ export const PublicSnapshotViewer: React.FC<PublicSnapshotViewerProps> = ({ snap
             </div>
           )}
 
-          {/* Date Range Badge */}
-          <div className="flex items-center space-x-1.5 px-3 py-1 bg-slate-950 rounded-lg border border-amber-500/50 text-amber-300 font-mono text-xs shadow-sm">
-            <Calendar className="w-3.5 h-3.5 text-amber-400" />
+          {/* Full Conversation Date Span */}
+          {snapshot.metadata?.fullConversationDateRange && (
+            <div className="hidden sm:flex flex-col items-end px-3 py-1 bg-slate-950 rounded-lg border border-slate-700 text-slate-400 font-mono text-[11px]">
+              <span className="text-slate-600 text-[10px] uppercase tracking-wide leading-none mb-0.5">Full Chat</span>
+              <span>{snapshot.metadata.fullConversationDateRange.start} ~ {snapshot.metadata.fullConversationDateRange.end}</span>
+            </div>
+          )}
+
+          {/* Filtered / Selected Date Range */}
+          <div className="flex flex-col items-end px-3 py-1 bg-slate-950 rounded-lg border border-amber-500/50 text-amber-300 font-mono text-[11px] shadow-sm">
+            <span className="text-amber-500/70 text-[10px] uppercase tracking-wide leading-none mb-0.5 flex items-center space-x-1">
+              <Calendar className="w-2.5 h-2.5" />
+              <span>Selected</span>
+            </span>
             <span>{snapshot.dateRange.start} ~ {snapshot.dateRange.end}</span>
           </div>
 
@@ -227,6 +291,21 @@ export const PublicSnapshotViewer: React.FC<PublicSnapshotViewerProps> = ({ snap
 
         {/* Download Snapshot Formats */}
         <div className="flex items-center space-x-1.5 text-slate-400">
+          {/* Toggle Sandbox Steps Button */}
+          <button
+            type="button"
+            onClick={() => setShowSandboxActivity(!showSandboxActivity)}
+            className={`px-2.5 py-1 border rounded-lg text-xs font-medium transition-colors flex items-center space-x-1 mr-1 ${
+              showSandboxActivity
+                ? 'bg-amber-950/50 text-amber-300 border-amber-500/40 shadow-sm'
+                : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+            }`}
+            title="Toggle Claude Sandbox Activity steps"
+          >
+            <Cpu className="w-3.5 h-3.5 text-amber-400" />
+            <span>Sandbox: {showSandboxActivity ? 'ON' : 'OFF'}</span>
+          </button>
+
           <span className="text-[11px] font-mono">Download:</span>
           <button
             type="button"
@@ -297,46 +376,10 @@ export const PublicSnapshotViewer: React.FC<PublicSnapshotViewerProps> = ({ snap
                       p({ children }: any) {
                         return <p className="mb-3 leading-relaxed text-slate-200 last:mb-0">{children}</p>;
                       },
-                      code({ node, inline, className, children, ...props }: any) {
-                        const match = /language-(\w+)/.exec(className || '');
-                        const codeString = String(children).replace(/\n$/, '');
-                        const isInline = inline || (!match && !codeString.includes('\n'));
-
-                        return !isInline ? (
-                          <div className="relative group/code my-3 rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
-                            <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/80 border-b border-slate-800 text-xs text-slate-400 font-mono">
-                              <span>{match ? match[1] : 'code'}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleCopyCode(codeString, `${msg.id}_${index}`)}
-                                className="flex items-center space-x-1 text-slate-400 hover:text-amber-300 transition-colors"
-                              >
-                                {copiedCodeId === `${msg.id}_${index}` ? (
-                                  <>
-                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                    <span className="text-emerald-400">Copied!</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="w-3.5 h-3.5" />
-                                    <span>Copy</span>
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                            <pre className="p-3 overflow-x-auto text-xs text-slate-200 font-mono leading-relaxed">
-                              <code>{children}</code>
-                            </pre>
-                          </div>
-                        ) : (
-                          <code className="bg-slate-800/80 text-amber-300 px-1.5 py-0.5 rounded text-xs font-mono" {...props}>
-                            {children}
-                          </code>
-                        );
-                      }
+                      code: CodeBlockItem
                     }}
                   >
-                    {msg.content}
+                    {processSandboxContent(msg.content, showSandboxActivity, 'markdown')}
                   </ReactMarkdown>
                 </div>
               </div>

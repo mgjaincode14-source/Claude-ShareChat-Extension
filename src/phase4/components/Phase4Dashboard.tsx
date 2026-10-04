@@ -224,11 +224,13 @@ export const Phase4Dashboard: React.FC = () => {
   }): Promise<SharedSnapshot | null> => {
     if (!sanitizedConversation || !sanitizedMessages) return null;
 
+    const { minDate: convStart, maxDate: convEnd } = getDateBoundaries(sanitizedConversation);
     const snap = createSnapshotObject(
       sanitizedConversation,
       sanitizedMessages,
       totalStats,
-      customOptions
+      customOptions,
+      { start: convStart, end: convEnd }
     );
 
     // Save locally to IndexedDB

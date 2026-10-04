@@ -68,7 +68,8 @@ export const Phase3Dashboard: React.FC = () => {
     format: 'markdown',
     includeMetadataHeader: true,
     includeTimestamp: true,
-    watermarkText: 'Shared via Claude Selective Share'
+    watermarkText: 'Shared via Claude Selective Share',
+    includeSandboxSteps: false
   });
 
   // Load conversations and restore session state
