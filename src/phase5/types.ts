@@ -76,3 +76,61 @@ export interface ConversationAnalytics {
   // Date range of conversation
   dateRange: { start: string; end: string };
 }
+
+// ─── Token Intelligence & Prompt Evaluation Types ────────────────────────────
+
+export type ClaudeModelId = 'claude-3-5-sonnet' | 'claude-3-5-haiku' | 'claude-3-opus';
+
+export interface PromptIssue {
+  type:
+    | 'polite_filler'
+    | 'duplicate_code'
+    | 'whitespace_comments'
+    | 'verbose_preamble'
+    | 'unstructured'
+    | 'high_ambiguity'
+    | 'large_log_dump'
+    | 'redundant_persona'
+    | 'repetitive_constraints'
+    | 'redundant_history';
+  title: string;
+  description: string;
+  estimatedSavings: number;
+}
+
+export interface PromptEvaluation {
+  score: number; // 0 - 100
+  status: 'optimal' | 'good' | 'needs_improvement' | 'wasteful';
+  statusLabel: string;
+  primaryAdvice: string;
+  potentialTokensSaved: number;
+  issues: PromptIssue[];
+  optimizedPromptPreview?: string;
+}
+
+export interface MessageTokenData {
+  index: number;
+  id: string;
+  sender: 'user' | 'assistant';
+  role: 'prompt' | 'response';
+  tokens: number;
+  characters: number;
+  words: number;
+  cost: number;
+  cumulativeTokens: number;
+  evaluation?: PromptEvaluation;
+}
+
+export interface ConversationTokenAnalytics {
+  totalTokens: number;
+  promptTokens: number;
+  responseTokens: number;
+  estimatedCost: number;
+  selectedModel: ClaudeModelId;
+  avgPromptTokens: number;
+  avgResponseTokens: number;
+  peakContextTokens: number;
+  overallEfficiencyScore: number;
+  totalPotentialSavings: number;
+  messages: MessageTokenData[];
+}

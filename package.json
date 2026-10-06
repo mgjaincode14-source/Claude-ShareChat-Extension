@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anthropic-ai/tokenizer": "^0.0.4",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "dexie": "^4.4.5",

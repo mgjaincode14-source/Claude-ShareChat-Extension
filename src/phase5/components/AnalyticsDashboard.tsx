@@ -13,6 +13,7 @@ import { StatsCards } from './StatsCards';
 import { ActivityHeatmap } from './ActivityHeatmap';
 import { SentimentChart } from './SentimentChart';
 import { CodeStatsPanel } from './CodeStatsPanel';
+import { TokenAnalyticsPanel } from './TokenAnalyticsPanel';
 import {
   BarChart2,
   Sparkles,
@@ -76,10 +77,11 @@ function exportAnalyticsReport(analytics: ConversationAnalytics): void {
 
 // ─── Tab definitions ─────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'sentiment' | 'code' | 'heatmap';
+type Tab = 'overview' | 'tokens' | 'sentiment' | 'code' | 'heatmap';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: '📊 Overview' },
+  { id: 'tokens', label: '🪙 Tokens & Cost' },
   { id: 'sentiment', label: '🧠 Sentiment' },
   { id: 'code', label: '💻 Code' },
   { id: 'heatmap', label: '📅 Heatmap' },
@@ -280,7 +282,10 @@ export const AnalyticsDashboard: React.FC = () => {
                 </>
               )}
 
-              {/* ── MESSAGES TAB removed — content merged into overview ── */}
+              {/* ── TOKENS & COST TAB ── */}
+              {activeTab === 'tokens' && currentConversation && (
+                <TokenAnalyticsPanel conversation={currentConversation} />
+              )}
 
               {/* ── SENTIMENT TAB ── */}
               {activeTab === 'sentiment' && (() => {
