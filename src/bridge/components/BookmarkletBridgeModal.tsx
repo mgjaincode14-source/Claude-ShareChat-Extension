@@ -56,41 +56,41 @@ export const BookmarkletBridgeModal: React.FC<BookmarkletBridgeModalProps> = ({ 
   };
 
   return (
-    <div className="p-5 bg-slate-900/90 border border-amber-500/30 rounded-2xl space-y-4 shadow-xl">
-      <div className="flex items-center space-x-2">
-        <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-          <Zap className="w-4 h-4 fill-amber-400" />
+    <div className="p-5 bg-white border border-[#e5e2d8] rounded-2xl space-y-4 shadow-sm">
+      <div className="flex items-center space-x-2.5">
+        <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
+          <Zap className="w-4 h-4 fill-amber-500" />
         </div>
         <div>
-          <h3 className="font-semibold text-slate-100 text-sm flex items-center space-x-2">
+          <h3 className="font-semibold text-[#141416] text-sm flex items-center space-x-2">
             <span>Temporary 1-Click Browser Import Bridge</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-amber-100 text-amber-900 border border-amber-200 font-mono font-medium">
               Bypasses Cloudflare 100%
             </span>
           </h3>
-          <p className="text-xs text-slate-400">Import any real Claude chat or shared link in 1 click</p>
+          <p className="text-xs text-[#716f68]">Import any real Claude chat or shared link in 1 click</p>
         </div>
       </div>
 
       {/* 3 Step Instructions */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-        <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
-          <span className="font-bold text-amber-400">Step 1: Drag Bookmark</span>
-          <p className="text-slate-400 text-[11px] leading-relaxed">
-            Drag the orange button below into your browser's Bookmarks Bar.
+        <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#e5e2d8] space-y-1">
+          <span className="font-bold text-[#141416]">Step 1: Drag Bookmark</span>
+          <p className="text-[#716f68] text-[11px] leading-relaxed">
+            Drag the button below into your browser's Bookmarks Bar.
           </p>
         </div>
 
-        <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
-          <span className="font-bold text-amber-400">Step 2: Open Claude</span>
-          <p className="text-slate-400 text-[11px] leading-relaxed">
-            Open any chat on <code className="text-amber-300 font-mono">claude.ai</code> or any shared link.
+        <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#e5e2d8] space-y-1">
+          <span className="font-bold text-[#141416]">Step 2: Open Claude</span>
+          <p className="text-[#716f68] text-[11px] leading-relaxed">
+            Open any chat on <code className="text-[#141416] bg-[#ebe8df] px-1 py-0.5 rounded font-mono">claude.ai</code> or any shared link.
           </p>
         </div>
 
-        <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
-          <span className="font-bold text-amber-400">Step 3: Click Bookmark</span>
-          <p className="text-slate-400 text-[11px] leading-relaxed">
+        <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#e5e2d8] space-y-1">
+          <span className="font-bold text-[#141416]">Step 3: Click Bookmark</span>
+          <p className="text-[#716f68] text-[11px] leading-relaxed">
             Click the bookmark. The chat loads in our tool in 1 second!
           </p>
         </div>
@@ -106,17 +106,17 @@ export const BookmarkletBridgeModal: React.FC<BookmarkletBridgeModalProps> = ({ 
             e.preventDefault();
             alert('To use this 1-click bridge:\n\n1. Drag this button to your browser Bookmarks Bar.\n2. Open any chat on claude.ai.\n3. Click the bookmark in your Bookmarks Bar!');
           }}
-          className="px-4 py-2.5 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-white font-bold rounded-xl text-xs shadow-lg shadow-orange-950/40 transition-all flex items-center space-x-2 cursor-grab active:cursor-grabbing border border-amber-400/30"
+          className="px-4 py-2 bg-[#141416] hover:bg-[#27272a] text-white font-medium rounded-full text-xs shadow-sm transition-all flex items-center space-x-2 cursor-grab active:cursor-grabbing"
           title="Drag this button to your browser Bookmarks Bar!"
         >
-          <Bookmark className="w-4 h-4 fill-white" />
+          <Bookmark className="w-3.5 h-3.5 fill-white" />
           <span>⚡ Drag to Bookmarks Bar: Import to Claude Selective Tool</span>
         </a>
 
         <div className="flex items-center space-x-2">
           <button
             onClick={handleCheckBridge}
-            className="px-3 py-2 bg-amber-950/40 hover:bg-amber-900/40 border border-amber-500/30 text-amber-300 rounded-xl text-xs transition-colors flex items-center space-x-1.5 font-medium"
+            className="px-3.5 py-2 bg-[#faf9f5] hover:bg-[#f3f2ec] border border-[#e5e2d8] text-[#141416] rounded-full text-xs transition-colors flex items-center space-x-1.5 font-medium"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
             <span>Check Bridged Chat</span>
@@ -124,16 +124,16 @@ export const BookmarkletBridgeModal: React.FC<BookmarkletBridgeModalProps> = ({ 
 
           <button
             onClick={handleCopyScript}
-            className="px-3 py-2 bg-slate-950 hover:bg-slate-800 text-slate-300 rounded-xl border border-slate-800 text-xs transition-colors flex items-center space-x-1.5"
+            className="px-3.5 py-2 bg-white hover:bg-[#faf9f5] text-[#716f68] hover:text-[#141416] rounded-full border border-[#e5e2d8] text-xs transition-colors flex items-center space-x-1.5"
           >
             {copied ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-emerald-400 font-medium">Copied</span>
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-emerald-700 font-medium">Copied</span>
               </>
             ) : (
               <>
-                <Copy className="w-3.5 h-3.5 text-slate-400" />
+                <Copy className="w-3.5 h-3.5 text-[#716f68]" />
                 <span>Copy Bookmark URL</span>
               </>
             )}
@@ -142,8 +142,8 @@ export const BookmarkletBridgeModal: React.FC<BookmarkletBridgeModalProps> = ({ 
       </div>
 
       {statusMessage && (
-        <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-amber-300 flex items-center space-x-2">
-          <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0" />
+        <div className="p-3 bg-[#faf1ec] border border-[#f0d5cb] rounded-xl text-xs text-[#1f1e1d] flex items-center space-x-2">
+          <Sparkles className="w-4 h-4 text-[#cc5a36] flex-shrink-0" />
           <span>{statusMessage}</span>
         </div>
       )}

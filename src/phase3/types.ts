@@ -13,7 +13,7 @@ export interface RedactionOptions {
   assistantAlias: string;
 }
 
-export type ExportFormat = 'markdown' | 'json' | 'html' | 'text';
+export type ExportFormat = 'markdown' | 'json' | 'html' | 'text' | 'claude-chat';
 
 export interface ExportOptions {
   format: ExportFormat;

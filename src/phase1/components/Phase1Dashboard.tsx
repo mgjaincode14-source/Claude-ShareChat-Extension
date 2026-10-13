@@ -14,8 +14,8 @@ import { ConversationList } from './ConversationList';
 import { ConversationViewer } from './ConversationViewer';
 import { ImportModal } from './ImportModal';
 import { RawJsonModal } from './RawJsonModal';
-import Link from 'next/link';
-import { CheckCircle2, ShieldCheck, Database, Layers, Sparkles, MessageSquare, ListFilter, BarChart2, Share2 } from 'lucide-react';
+import { UnifiedHeader } from '@/components/UnifiedHeader';
+import { Database } from 'lucide-react';
 import { writeSession, clearSession } from '@/store/workflowSession';
 
 export const Phase1Dashboard: React.FC = () => {
@@ -147,67 +147,20 @@ export const Phase1Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
-      {/* Top Banner Status Bar for Phase 1 */}
-      <header className="h-12 border-b border-slate-800/80 bg-slate-900/60 px-4 flex items-center justify-between text-xs flex-shrink-0">
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Conversation Reader</span>
+    <div className="flex flex-col h-screen bg-[#f3f2ec] text-[#141416] font-sans overflow-hidden">
+      {/* Keystone Unified Header */}
+      <UnifiedHeader
+        currentPhase={1}
+        title="Conversation Reader"
+        subtitle={`${stats.conversationCount} chats · ${stats.totalMessagesCount} messages stored`}
+        rightAction={
+          <div className="hidden sm:flex items-center space-x-2 bg-[#ffffff] px-3 py-1 rounded-full border border-[#e5e2d8] text-xs shadow-sm">
+            <Database className="w-3.5 h-3.5 text-[#141416]" />
+            <span className="font-semibold text-[#141416]">{stats.conversationCount}</span>
+            <span className="text-[#716f68]">chats</span>
           </div>
-
-          <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800 ml-4">
-            <span className="px-2.5 py-1 bg-amber-600 text-white font-medium rounded text-xs shadow-sm flex items-center space-x-1">
-              <Layers className="w-3 h-3" />
-              <span>Conversation Reader</span>
-            </span>
-            <Link
-              href="/phase2"
-              className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
-            >
-              <ListFilter className="w-3 h-3" />
-              <span>Message Filter</span>
-            </Link>
-            <Link
-              href="/phase3"
-              className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
-            >
-              <ShieldCheck className="w-3 h-3" />
-              <span>Privacy & Export</span>
-            </Link>
-            <Link
-              href="/phase4"
-              className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
-            >
-              <Share2 className="w-3 h-3" />
-              <span>Share Link Generator</span>
-            </Link>
-            <Link
-              href="/phase5"
-              className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
-            >
-              <BarChart2 className="w-3 h-3" />
-              <span>Analytics</span>
-            </Link>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-4 text-slate-400">
-          <div className="flex items-center space-x-3 bg-slate-950 px-3 py-1 rounded-lg border border-slate-800">
-            <span className="flex items-center space-x-1">
-              <Database className="w-3.5 h-3.5 text-amber-400" />
-              <span className="font-semibold text-slate-200">{stats.conversationCount}</span>
-              <span className="text-[11px] text-slate-500">chats</span>
-            </span>
-            <span>•</span>
-            <span className="flex items-center space-x-1">
-              <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-              <span className="font-semibold text-slate-200">{stats.totalMessagesCount}</span>
-              <span className="text-[11px] text-slate-500">msgs</span>
-            </span>
-          </div>
-        </div>
-      </header>
+        }
+      />
 
       {/* Main Workspace Split View */}
       <div className="flex-1 flex overflow-hidden">

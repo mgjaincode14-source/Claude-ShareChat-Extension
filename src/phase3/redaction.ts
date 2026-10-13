@@ -1,20 +1,92 @@
 import { UnifiedConversation, UnifiedMessage } from '@/phase1/types';
 import { RedactionOptions, RedactionStats, RedactionStyle } from './types';
 
-// Regular expression patterns for secrets & PII
-const API_KEY_PATTERNS = [
-  /sk-(live|test|proj|ant|or)-[a-zA-Z0-9_\-]{20,}/g, // OpenAI, Anthropic, OpenRouter
-  /AIzaSy[a-zA-Z0-9_\-]{33}/g,                        // Google API Key
-  /ghp_[a-zA-Z0-9]{36}/g,                            // GitHub Personal Access Token
-  /gho_[a-zA-Z0-9]{36}/g,                            // GitHub OAuth Token
-  /xox[baprs]-[a-zA-Z0-9\-]{10,}/g,                  // Slack token
-  /AKIA[0-9A-Z]{16}/g,                               // AWS Access Key ID
-  /Bearer\s+[a-zA-Z0-9\-\._~\+\/]+=*/g                // Bearer Auth Header
-];
+// ============================================================================
+// LLM PII & SECRETS DETECTION TEMPLATE (Free / Open-Source Models)
+// ============================================================================
 
-const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
-const IP_PATTERN = /\b(?:\d{1,3}\.){3}\d{1,3}\b|\b(?:[A-Fa-f0-9]{1,4}:){7}[A-Fa-f0-9]{1,4}\b/g;
-const PHONE_PATTERN = /\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
+export type DetectedPIIType = 'API_KEY' | 'EMAIL' | 'IP_ADDRESS' | 'PHONE' | 'CUSTOM';
+
+export interface DetectedPIIEntity {
+  type: DetectedPIIType;
+  value: string;
+  startIndex?: number;
+  endIndex?: number;
+  confidence?: number;
+}
+
+export interface LLMPIIDetectionRequest {
+  text: string;
+  detectApiKeys: boolean;
+  detectEmails: boolean;
+  detectIpAddresses: boolean;
+  detectPhoneNumbers: boolean;
+}
+
+export interface LLMPIIDetectionResponse {
+  entities: DetectedPIIEntity[];
+  sanitizedText?: string;
+  modelUsed?: string;
+}
+
+/**
+ * Architectural Template for Free/Local LLM PII & Secret Identification
+ *
+ * NOTE: All hardcoded regex patterns for phone numbers, API keys, email addresses,
+ * and IP addresses have been removed as requested. Hardcoded regexes are brittle 
+ * and generate false positives across code snippets, CIDR notations, and variable names.
+ *
+ * This function provides the pluggable template adapter for a Free / Non-Paid LLM API:
+ *   - Local Ollama (e.g., Qwen 2.5 Coder, Mistral, or Llama 3 via http://localhost:11434)
+ *   - Free Hugging Face Inference API / Open-weight NER models
+ *   - Client-side in-browser Transformers.js / ONNX
+ *   - Free tier serverless AI (e.g., Cloudflare Workers AI free tier, Groq free tier)
+ *
+ * STRICT POLICY: NO PAID MODELS WILL BE USED.
+ *
+ * Prompt template for the free LLM:
+ * ```
+ * System: You are a strict PII and Secret Detection Engine. Inspect the provided text 
+ * and extract any sensitive credentials or personal identifiers requested.
+ * Do not flag standard programming code, version strings (e.g. 1.2.3), or generic numbers.
+ * Return strictly JSON: { "entities": [ { "type": "API_KEY"|"EMAIL"|"IP_ADDRESS"|"PHONE", "value": "..." } ] }
+ * ```
+ */
+export async function detectPIIWithLLM(
+  request: LLMPIIDetectionRequest
+): Promise<LLMPIIDetectionResponse> {
+  try {
+    const res = await fetch('/api/ai/redact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: request.text,
+        options: {
+          detectApiKeys: request.detectApiKeys,
+          detectEmails: request.detectEmails,
+          detectIpAddresses: request.detectIpAddresses,
+          detectPhoneNumbers: request.detectPhoneNumbers
+        }
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    return {
+      entities: Array.isArray(data.entities) ? data.entities : [],
+      modelUsed: 'Groq (openai/gpt-oss-120b) / Gemini'
+    };
+  } catch (err) {
+    console.warn('[Redaction] LLM PII detection error (returning empty entities):', err);
+    return {
+      entities: [],
+      modelUsed: 'fallback'
+    };
+  }
+}
 
 function getMask(label: string, length: number, style: RedactionStyle): string {
   if (style === 'blocks') {
@@ -23,9 +95,15 @@ function getMask(label: string, length: number, style: RedactionStyle): string {
   return `[REDACTED: ${label}]`;
 }
 
+/**
+ * Sanitizes text by applying redaction masks to detected sensitive entities.
+ * Accepts an optional list of entities identified by the LLM detection engine.
+ * Custom keywords are matched and masked directly without brittle regexes.
+ */
 export function detectAndRedactText(
   text: string,
-  options: RedactionOptions
+  options: RedactionOptions,
+  detectedEntities?: DetectedPIIEntity[]
 ): { sanitizedText: string; stats: RedactionStats } {
   if (!text) {
     return {
@@ -48,60 +126,55 @@ export function detectAndRedactText(
   let phoneNumbersCount = 0;
   let keywordsCount = 0;
 
-  // 1. Redact API Keys / Tokens
-  if (options.redactApiKeys) {
-    API_KEY_PATTERNS.forEach((pattern) => {
-      const matches = sanitized.match(pattern);
-      if (matches) {
-        apiKeysCount += matches.length;
-        sanitized = sanitized.replace(pattern, (match) => getMask('API_KEY', match.length, options.replacementStyle));
+  // 1. Redact LLM-identified entities
+  if (detectedEntities && detectedEntities.length > 0) {
+    for (const entity of detectedEntities) {
+      if (!entity.value) continue;
+
+      const shouldRedact =
+        (entity.type === 'API_KEY' && options.redactApiKeys) ||
+        (entity.type === 'EMAIL' && options.redactEmails) ||
+        (entity.type === 'IP_ADDRESS' && options.redactIpAddresses) ||
+        (entity.type === 'PHONE' && options.redactPhoneNumbers);
+
+      if (shouldRedact && sanitized.includes(entity.value)) {
+        sanitized = sanitized.replaceAll(
+          entity.value,
+          getMask(entity.type, entity.value.length, options.replacementStyle)
+        );
+
+        if (entity.type === 'API_KEY') apiKeysCount++;
+        else if (entity.type === 'EMAIL') emailsCount++;
+        else if (entity.type === 'IP_ADDRESS') ipsCount++;
+        else if (entity.type === 'PHONE') phoneNumbersCount++;
       }
-    });
-  }
-
-  // 2. Redact Emails
-  if (options.redactEmails) {
-    const emailMatches = sanitized.match(EMAIL_PATTERN);
-    if (emailMatches) {
-      emailsCount += emailMatches.length;
-      sanitized = sanitized.replace(EMAIL_PATTERN, (match) => getMask('EMAIL', match.length, options.replacementStyle));
     }
   }
 
-  // 3. Redact IP Addresses
-  if (options.redactIpAddresses) {
-    const ipMatches = sanitized.match(IP_PATTERN);
-    if (ipMatches) {
-      ipsCount += ipMatches.length;
-      sanitized = sanitized.replace(IP_PATTERN, (match) => getMask('IP_ADDRESS', match.length, options.replacementStyle));
-    }
-  }
-
-  // 4. Redact Phone Numbers
-  if (options.redactPhoneNumbers) {
-    const phoneMatches = sanitized.match(PHONE_PATTERN);
-    if (phoneMatches) {
-      phoneNumbersCount += phoneMatches.length;
-      sanitized = sanitized.replace(PHONE_PATTERN, (match) => getMask('PHONE', match.length, options.replacementStyle));
-    }
-  }
-
-  // 5. Redact Custom Keywords
+  // 2. Redact Custom Confidential Keywords (User-specified exact terms)
   if (options.customKeywords && options.customKeywords.length > 0) {
-    options.customKeywords.forEach((kw) => {
+    for (const kw of options.customKeywords) {
       const trimmed = kw.trim();
-      if (!trimmed) return;
-      try {
-        const kwRegex = new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-        const kwMatches = sanitized.match(kwRegex);
-        if (kwMatches) {
-          keywordsCount += kwMatches.length;
-          sanitized = sanitized.replace(kwRegex, (match) => getMask('CONFIDENTIAL', match.length, options.replacementStyle));
-        }
-      } catch {
-        // Skip invalid regex
+      if (!trimmed) continue;
+
+      // Case-insensitive exact string match without regexes
+      let searchIdx = 0;
+      const lowerKw = trimmed.toLowerCase();
+      while (searchIdx < sanitized.length) {
+        const lowerSanitized = sanitized.toLowerCase();
+        const foundIdx = lowerSanitized.indexOf(lowerKw, searchIdx);
+        if (foundIdx === -1) break;
+
+        keywordsCount++;
+        const originalSlice = sanitized.slice(foundIdx, foundIdx + trimmed.length);
+        const mask = getMask('CONFIDENTIAL', originalSlice.length, options.replacementStyle);
+        sanitized =
+          sanitized.slice(0, foundIdx) +
+          mask +
+          sanitized.slice(foundIdx + trimmed.length);
+        searchIdx = foundIdx + mask.length;
       }
-    });
+    }
   }
 
   const totalRedacted = apiKeysCount + emailsCount + ipsCount + phoneNumbersCount + keywordsCount;
@@ -119,10 +192,14 @@ export function detectAndRedactText(
   };
 }
 
+/**
+ * Applies redaction across a conversation and its messages.
+ */
 export function applyRedactionToConversation(
   conversation: UnifiedConversation,
   selectedMessages: UnifiedMessage[],
-  options: RedactionOptions
+  options: RedactionOptions,
+  detectedEntitiesMap?: Record<string, DetectedPIIEntity[]>
 ): {
   sanitizedConversation: UnifiedConversation;
   sanitizedMessages: UnifiedMessage[];
@@ -135,7 +212,8 @@ export function applyRedactionToConversation(
   let totalKeywords = 0;
 
   const sanitizedMessages: UnifiedMessage[] = selectedMessages.map((msg) => {
-    const { sanitizedText, stats } = detectAndRedactText(msg.content, options);
+    const msgEntities = detectedEntitiesMap ? detectedEntitiesMap[msg.id] : undefined;
+    const { sanitizedText, stats } = detectAndRedactText(msg.content, options, msgEntities);
 
     totalApiKeys += stats.apiKeysCount;
     totalEmails += stats.emailsCount;

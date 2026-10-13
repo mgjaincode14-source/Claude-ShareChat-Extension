@@ -21,18 +21,18 @@ function getSize(weight: number): number {
 export const TopicCloud: React.FC<TopicCloudProps> = ({ topics }) => {
   if (topics.length === 0) {
     return (
-      <div className="rounded-2xl border border-slate-700/50 bg-slate-900/60 p-5">
-        <h3 className="text-sm font-semibold text-slate-100 mb-2">Topic Cloud</h3>
-        <p className="text-xs text-slate-600">No topics detected.</p>
+      <div className="rounded-2xl border border-[#e5e2d8] bg-white p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-[#141416] mb-2">Topic Cloud</h3>
+        <p className="text-xs text-[#716f68]">No topics detected.</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-slate-700/50 bg-slate-900/60 p-5 backdrop-blur-sm">
+    <div className="rounded-2xl border border-[#e5e2d8] bg-white p-5 shadow-sm">
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-slate-100">Topic Cloud</h3>
-        <p className="text-xs text-slate-500 mt-0.5">
+        <h3 className="text-sm font-semibold text-[#141416]">Topic Cloud</h3>
+        <p className="text-xs text-[#716f68] mt-0.5">
           Top {topics.length} recurring keywords (by frequency)
         </p>
       </div>
@@ -41,7 +41,7 @@ export const TopicCloud: React.FC<TopicCloudProps> = ({ topics }) => {
         {topics.map((topic, i) => {
           const color = COLORS[i % COLORS.length];
           const size = getSize(topic.weight);
-          const opacity = 0.6 + topic.weight * 0.4;
+          const opacity = 0.7 + topic.weight * 0.3;
           return (
             <span
               key={topic.word}
@@ -62,14 +62,14 @@ export const TopicCloud: React.FC<TopicCloudProps> = ({ topics }) => {
       </div>
 
       {/* Top-5 bar breakdown */}
-      <div className="mt-4 space-y-2 border-t border-slate-800 pt-4">
-        <p className="text-xs text-slate-500 font-medium mb-2">Top 5 Topics</p>
+      <div className="mt-4 space-y-2 border-t border-[#e5e2d8] pt-4">
+        <p className="text-xs text-[#716f68] font-medium mb-2">Top 5 Topics</p>
         {topics.slice(0, 5).map((topic, i) => {
           const color = COLORS[i % COLORS.length];
           return (
             <div key={topic.word} className="flex items-center space-x-3">
-              <span className="text-xs text-slate-400 w-20 truncate">{topic.word}</span>
-              <div className="flex-1 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+              <span className="text-xs text-[#141416] font-medium w-20 truncate">{topic.word}</span>
+              <div className="flex-1 bg-[#ebe8df] rounded-full h-1.5 overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{
@@ -78,7 +78,7 @@ export const TopicCloud: React.FC<TopicCloudProps> = ({ topics }) => {
                   }}
                 />
               </div>
-              <span className="text-xs text-slate-500 w-8 text-right">{topic.count}x</span>
+              <span className="text-xs text-[#716f68] font-mono w-8 text-right">{topic.count}x</span>
             </div>
           );
         })}

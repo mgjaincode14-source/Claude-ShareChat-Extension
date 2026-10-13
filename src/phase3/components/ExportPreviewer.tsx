@@ -4,7 +4,8 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ExportFormat } from '../types';
-import { Code, Eye, Layers, Copy, Check } from 'lucide-react';
+import { Code, Eye, Copy, Check } from 'lucide-react';
+import { ClaudeIcon } from '@/components/ClaudeIcon';
 
 interface ExportPreviewerProps {
   exportedContent: string;
@@ -26,28 +27,32 @@ export const ExportPreviewer: React.FC<ExportPreviewerProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const isHtmlBased = format === 'html' || format === 'claude-chat';
+
   return (
-    <div className="flex-1 bg-slate-950 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+    <div className="flex-1 bg-white border border-[#e8e5dd] rounded-2xl flex flex-col overflow-hidden shadow-sm text-[#1f1e1d]">
       {/* Header Bar */}
-      <div className="bg-slate-900/90 border-b border-slate-800 px-5 py-3 flex items-center justify-between text-xs backdrop-blur-md">
-        <div className="flex items-center space-x-2">
-          <Layers className="w-4 h-4 text-amber-400" />
-          <span className="font-semibold text-slate-200">{title}</span>
-          <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-mono text-[10px] border border-slate-700">
-            {format.toUpperCase()}
+      <div className="bg-[#faf9f5] border-b border-[#e8e5dd] px-5 py-3.5 flex items-center justify-between text-xs backdrop-blur-xl">
+        <div className="flex items-center space-x-2.5">
+          <span className="w-6 h-6 rounded-lg bg-[#cc5a36] text-white flex items-center justify-center shadow-sm">
+            <ClaudeIcon className="w-3.5 h-3.5" />
+          </span>
+          <span className="font-claude-serif font-semibold text-[#1f1e1d] text-sm tracking-tight">{title}</span>
+          <span className="px-2.5 py-0.5 rounded-full bg-[#f0eee6] text-[#6b6963] font-mono text-[10px] border border-[#e5e0d8] font-medium">
+            {format === 'claude-chat' ? 'CLAUDE CHAT (.HTML)' : format.toUpperCase()}
           </span>
         </div>
 
         {/* View Mode Toggle & Copy */}
         <div className="flex items-center space-x-2">
-          <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+          <div className="flex items-center bg-[#f0eee6] p-1 rounded-full border border-[#e5e0d8]">
             <button
               type="button"
               onClick={() => setViewMode('preview')}
-              className={`px-3 py-1 rounded-lg transition-colors flex items-center space-x-1 ${
+              className={`px-3 py-1 rounded-full transition-all duration-200 flex items-center space-x-1.5 active:scale-95 ${
                 viewMode === 'preview'
-                  ? 'bg-amber-600 text-white font-medium shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[#1f1e1d] text-white font-medium shadow-sm'
+                  : 'text-[#6b6963] hover:text-[#1f1e1d]'
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
@@ -56,10 +61,10 @@ export const ExportPreviewer: React.FC<ExportPreviewerProps> = ({
             <button
               type="button"
               onClick={() => setViewMode('code')}
-              className={`px-3 py-1 rounded-lg transition-colors flex items-center space-x-1 ${
+              className={`px-3 py-1 rounded-full transition-all duration-200 flex items-center space-x-1.5 active:scale-95 ${
                 viewMode === 'code'
-                  ? 'bg-amber-600 text-white font-medium shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[#1f1e1d] text-white font-medium shadow-sm'
+                  : 'text-[#6b6963] hover:text-[#1f1e1d]'
               }`}
             >
               <Code className="w-3.5 h-3.5" />
@@ -70,28 +75,33 @@ export const ExportPreviewer: React.FC<ExportPreviewerProps> = ({
           <button
             type="button"
             onClick={handleCopy}
-            className="p-1.5 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-amber-300 border border-slate-800 rounded-xl transition-colors"
+            className="p-1.5 bg-white hover:bg-[#faf9f5] text-[#6b6963] hover:text-[#1f1e1d] border border-[#e8e5dd] rounded-full transition-all duration-200 active:scale-90 shadow-sm"
             title="Copy Raw Content"
           >
-            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+            {copied ? (
+              <Check className="w-4 h-4 text-emerald-600 animate-claude-scale" />
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
           </button>
         </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800 p-5">
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-stone-300 p-4 sm:p-6 bg-[#faf9f5]">
         {viewMode === 'code' || format === 'json' || format === 'text' ? (
-          <pre className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl text-xs font-mono text-slate-200 leading-relaxed overflow-x-auto whitespace-pre-wrap">
+          <pre className="p-4 bg-[#1a1a18] border border-[#2e2e2a] rounded-xl text-xs font-mono text-[#edeae1] leading-relaxed overflow-x-auto whitespace-pre-wrap">
             <code>{exportedContent}</code>
           </pre>
-        ) : format === 'html' ? (
+        ) : isHtmlBased ? (
           <iframe
             srcDoc={exportedContent}
             title="HTML Export Preview"
-            className="w-full h-full min-h-[500px] border-0 rounded-xl bg-slate-900"
+            sandbox="allow-scripts allow-same-origin"
+            className="w-full h-full min-h-[580px] border border-[#e8e5dd] rounded-xl bg-[#faf9f5] shadow-sm"
           />
         ) : (
-          <div className="prose prose-invert prose-slate max-w-none text-sm leading-relaxed prose-pre:bg-slate-900 prose-pre:border prose-pre:border-slate-800 prose-code:text-amber-300">
+          <div className="prose prose-stone max-w-none text-sm leading-relaxed text-[#1f1e1d] prose-headings:font-claude-serif prose-headings:text-[#1f1e1d]">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {exportedContent}
             </ReactMarkdown>

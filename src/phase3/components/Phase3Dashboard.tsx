@@ -11,17 +11,19 @@ import { SelectionOptions } from '@/phase2/types';
 import { filterMessagesBySelection, getDateBoundaries } from '@/phase2/engine';
 import { SelectionToolbar } from '@/phase2/components/SelectionToolbar';
 import { RedactionOptions, ExportOptions } from '../types';
-import { applyRedactionToConversation } from '../redaction';
+import { applyRedactionToConversation, DetectedPIIEntity } from '../redaction';
 import { 
   generateMarkdownExport, 
   generateJsonExport, 
   generateHtmlExport, 
   generateTextExport, 
+  generateClaudeChatExport,
   downloadFile 
 } from '../exportEngine';
 import { RedactionControlPanel } from './RedactionControlPanel';
 import { ExportOptionsToolbar } from './ExportOptionsToolbar';
 import { ExportPreviewer } from './ExportPreviewer';
+import { UnifiedHeader } from '@/components/UnifiedHeader';
 import { 
   ShieldCheck, 
   Sparkles, 
@@ -65,7 +67,7 @@ export const Phase3Dashboard: React.FC = () => {
 
   // Phase 3 Export Options
   const [exportOptions, setExportOptions] = useState<ExportOptions>({
-    format: 'markdown',
+    format: 'claude-chat',
     includeMetadataHeader: true,
     includeTimestamp: true,
     watermarkText: 'Shared via Claude Selective Share',
@@ -207,14 +209,63 @@ export const Phase3Dashboard: React.FC = () => {
     });
   };
 
+  // Per-conversation AI PII detection cache: convId -> { msgId: DetectedPIIEntity[] }
+  const [detectedEntitiesCache, setDetectedEntitiesCache] = useState<Record<string, Record<string, DetectedPIIEntity[]>>>({});
+  const [isScanningPII, setIsScanningPII] = useState(false);
+
+  const currentDetectedEntities = currentConversation ? detectedEntitiesCache[currentConversation.id] || null : null;
+  const hasScannedPII = Boolean(currentDetectedEntities && Object.keys(currentDetectedEntities).length > 0);
+
+  // On-demand AI PII scan: evaluates ONLY the currently selected conversation when clicked
+  const handleScanPIIWithAI = async () => {
+    if (!currentConversation || currentConversation.messages.length === 0) return;
+    setIsScanningPII(true);
+    try {
+      console.log(`[Phase3Dashboard] On-demand AI PII scan requested for ${currentConversation.messages.length} messages in chat: ${currentConversation.id}`);
+      const payload = currentConversation.messages.map((m) => ({
+        id: m.id,
+        content: m.content
+      }));
+      const res = await fetch('/api/ai/redact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: payload,
+          options: {
+            detectApiKeys: redactionOptions.redactApiKeys,
+            detectEmails: redactionOptions.redactEmails,
+            detectIpAddresses: redactionOptions.redactIpAddresses,
+            detectPhoneNumbers: redactionOptions.redactPhoneNumbers
+          }
+        })
+      });
+      if (!res.ok) {
+        console.warn(`[Phase3Dashboard] /api/ai/redact returned HTTP ${res.status}`);
+        return;
+      }
+      const data = await res.json();
+      if (data.success && data.results) {
+        setDetectedEntitiesCache((prev) => ({
+          ...prev,
+          [currentConversation.id]: data.results
+        }));
+        console.log('[Phase3Dashboard] ✅ AI PII Entities detected via Groq/Gemini for', Object.keys(data.results).length, 'messages');
+      }
+    } catch (err) {
+      console.warn('[Phase3Dashboard] AI PII scan error:', err);
+    } finally {
+      setIsScanningPII(false);
+    }
+  };
+
   // Compute selected messages via Phase 2 Engine
   const baseSelectedMessages = currentConversation
     ? filterMessagesBySelection(currentConversation, selectionOptions)
     : [];
 
-  // Apply Phase 3 Redaction
+  // Apply Phase 3 Redaction with AI-detected entities
   const { sanitizedConversation, sanitizedMessages, totalStats } = currentConversation
-    ? applyRedactionToConversation(currentConversation, baseSelectedMessages, redactionOptions)
+    ? applyRedactionToConversation(currentConversation, baseSelectedMessages, redactionOptions, currentDetectedEntities || undefined)
     : {
         sanitizedConversation: null,
         sanitizedMessages: [],
@@ -232,6 +283,9 @@ export const Phase3Dashboard: React.FC = () => {
   let exportedContent = '';
   if (sanitizedConversation && sanitizedMessages) {
     switch (exportOptions.format) {
+      case 'claude-chat':
+        exportedContent = generateClaudeChatExport(sanitizedConversation, sanitizedMessages, exportOptions, redactionOptions);
+        break;
       case 'markdown':
         exportedContent = generateMarkdownExport(sanitizedConversation, sanitizedMessages, exportOptions, redactionOptions);
         break;
@@ -251,13 +305,15 @@ export const Phase3Dashboard: React.FC = () => {
     if (!sanitizedConversation || !exportedContent) return;
     const cleanTitle = sanitizedConversation.title.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
     const extMap: Record<string, { ext: string; mime: string }> = {
+      'claude-chat': { ext: 'html', mime: 'text/html' },
       markdown: { ext: 'md', mime: 'text/markdown' },
       json: { ext: 'json', mime: 'application/json' },
       html: { ext: 'html', mime: 'text/html' },
       text: { ext: 'txt', mime: 'text/plain' }
     };
     const target = extMap[exportOptions.format] || { ext: 'txt', mime: 'text/plain' };
-    downloadFile(exportedContent, `${cleanTitle}_shared.${target.ext}`, target.mime);
+    const suffix = exportOptions.format === 'claude-chat' ? '_claude_chat' : '_shared';
+    downloadFile(exportedContent, `${cleanTitle}${suffix}.${target.ext}`, target.mime);
   };
 
   const handleCopy = () => {
@@ -275,9 +331,9 @@ export const Phase3Dashboard: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+      <div className="h-screen bg-[#f3f2ec] flex items-center justify-center text-[#716f68]">
         <div className="flex items-center space-x-2">
-          <Sparkles className="w-5 h-5 text-amber-500 animate-spin" />
+          <Sparkles className="w-5 h-5 text-[#141416] animate-spin" />
           <span>Loading Privacy & Export...</span>
         </div>
       </div>
@@ -285,57 +341,19 @@ export const Phase3Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-slate-950 text-slate-100 font-sans overflow-hidden">
-      {/* Top Navbar */}
-      <header className="h-14 border-b border-slate-800 bg-slate-900/90 px-6 flex items-center justify-between backdrop-blur-md select-none z-20">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-600 to-emerald-600 flex items-center justify-center text-white shadow-md shadow-emerald-950/30">
-            <ShieldCheck className="w-4.5 h-4.5" />
+    <div className="h-screen flex flex-col bg-[#f3f2ec] text-[#141416] font-sans overflow-hidden">
+      {/* Keystone Unified Header */}
+      <UnifiedHeader
+        currentPhase={3}
+        title="Privacy & Export"
+        subtitle={`${totalStats.totalRedacted} items sanitized · Ready to export`}
+        rightAction={
+          <div className="hidden sm:flex items-center space-x-1.5 px-3 py-1 rounded-full bg-white border border-[#e5e2d8] text-xs text-emerald-800 shadow-sm">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-keystone-pulse" />
+            <span>Zero-Cloud Local Redaction</span>
           </div>
-          <div>
-            <h1 className="font-bold text-sm text-slate-100 leading-tight">
-              Privacy & Export
-            </h1>
-            <p className="text-[11px] text-slate-400">Redact sensitive data and export your filtered conversation</p>
-          </div>
-        </div>
-
-        {/* Phase Navigation Tabs */}
-        <div className="flex items-center space-x-2 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
-          <Link
-            href="/phase1"
-            className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors flex items-center space-x-1"
-          >
-            <Layers className="w-3 h-3" />
-            <span>Conversation Reader</span>
-          </Link>
-          <Link
-            href="/phase2"
-            className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors flex items-center space-x-1"
-          >
-            <ListFilter className="w-3 h-3" />
-            <span>Message Filter</span>
-          </Link>
-          <span className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-medium shadow-sm flex items-center space-x-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />
-            <span>Privacy & Export</span>
-          </span>
-          <Link
-            href="/phase4"
-            className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors flex items-center space-x-1"
-          >
-            <Share2 className="w-3 h-3" />
-            <span>Share Link Generator</span>
-          </Link>
-          <Link
-            href="/phase5"
-            className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors flex items-center space-x-1"
-          >
-            <BarChart2 className="w-3 h-3" />
-            <span>Analytics</span>
-          </Link>
-        </div>
-      </header>
+        }
+      />
 
       {/* Main App Layout */}
       <div className="flex-1 flex overflow-hidden">
@@ -352,7 +370,7 @@ export const Phase3Dashboard: React.FC = () => {
 
         {/* Main Work Area */}
         {currentConversation ? (
-          <div className="flex-1 flex flex-col p-4 sm:p-6 space-y-4 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800 bg-slate-950">
+          <div className="flex-1 flex flex-col p-4 sm:p-6 space-y-4 overflow-y-auto scrollbar-thin scrollbar-thumb-stone-300 bg-[#f3f2ec]">
             {/* Phase 2 Filter Toolbar */}
             <SelectionToolbar
               conversation={currentConversation}
@@ -368,6 +386,9 @@ export const Phase3Dashboard: React.FC = () => {
               options={redactionOptions}
               onChangeOptions={setRedactionOptions}
               stats={totalStats}
+              isScanning={isScanningPII}
+              hasScanned={hasScannedPII}
+              onScanPII={handleScanPIIWithAI}
             />
 
             {/* Phase 3 Export Toolbar */}
@@ -387,12 +408,12 @@ export const Phase3Dashboard: React.FC = () => {
             />
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500 space-y-4">
-            <Layers className="w-12 h-12 text-slate-700" />
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-[#716f68] space-y-4">
+            <Layers className="w-12 h-12 text-[#9ca3af]" />
             <p className="text-sm">Select a conversation from the sidebar to begin exporting & redacting.</p>
             <button
               onClick={handleLoadSamples}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-medium transition-colors"
+              className="px-4 py-2 bg-[#141416] hover:bg-[#27272a] text-white rounded-full text-xs font-medium transition-colors"
             >
               Load Demo Data
             </button>

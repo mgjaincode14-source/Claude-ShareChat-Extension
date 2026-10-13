@@ -31,12 +31,12 @@ const DAY_LABELS: { day: number; label: string }[] = [
 ];
 
 function getColor(count: number, max: number): string {
-  if (count === 0) return '#1e293b';
+  if (count === 0) return '#ebe8df';
   const intensity = count / max;
-  if (intensity < 0.25) return '#065f46';
-  if (intensity < 0.5)  return '#059669';
+  if (intensity < 0.25) return '#86efac';
+  if (intensity < 0.5)  return '#34d399';
   if (intensity < 0.75) return '#10b981';
-  return '#34d399';
+  return '#059669';
 }
 
 function generateDateRange(weeks: number): string[] {
@@ -105,21 +105,21 @@ export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ activityByDay 
   const totalMessages   = activityByDay.reduce((s, d) => s + d.count, 0);
 
   return (
-    <div className="rounded-2xl border border-slate-700/50 bg-slate-900/60 p-5 backdrop-blur-sm">
+    <div className="rounded-2xl border border-[#e5e2d8] bg-white p-5 shadow-sm">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-slate-100">Activity Heatmap</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h3 className="text-sm font-semibold text-[#141416]">Activity Heatmap</h3>
+          <p className="text-xs text-[#716f68] mt-0.5">
             {totalActiveDays} active day{totalActiveDays !== 1 ? 's' : ''} · {totalMessages} message{totalMessages !== 1 ? 's' : ''}
           </p>
         </div>
 
         {/* Legend */}
-        <div className="flex items-center space-x-1 text-xs text-slate-500">
+        <div className="flex items-center space-x-1.5 text-xs text-[#716f68]">
           <span>Less</span>
-          {['#1e293b', '#065f46', '#059669', '#10b981', '#34d399'].map((c) => (
-            <div key={c} className="w-3 h-3 rounded-sm" style={{ backgroundColor: c }} />
+          {['#ebe8df', '#86efac', '#34d399', '#10b981', '#059669'].map((c) => (
+            <div key={c} className="w-3 h-3 rounded-sm border border-[#e5e2d8]" style={{ backgroundColor: c }} />
           ))}
           <span>More</span>
         </div>
@@ -139,7 +139,7 @@ export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ activityByDay 
               x={x}
               y={11}
               fontSize={10}
-              fill="#64748b"
+              fill="#716f68"
               fontFamily="inherit"
             >
               {label}
@@ -154,7 +154,7 @@ export const ActivityHeatmap: React.FC<ActivityHeatmapProps> = ({ activityByDay 
               // Centre text vertically in the cell row
               y={MONTH_LABEL_HEIGHT + day * STEP + CELL_SIZE / 2 + 3}
               fontSize={9}
-              fill="#64748b"
+              fill="#716f68"
               textAnchor="end"
               fontFamily="inherit"
             >

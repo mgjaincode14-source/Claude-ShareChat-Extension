@@ -183,35 +183,35 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-6 relative overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm transition-opacity duration-200">
+      <div className="bg-[#ffffff] border border-[#e5e2d8] rounded-2xl max-w-xl w-full p-6 shadow-2xl shadow-black/15 space-y-6 relative overflow-hidden animate-keystone-scale">
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+        <div className="flex items-center justify-between border-b border-[#e5e2d8] pb-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 rounded-xl bg-[#141416] flex items-center justify-center text-white shadow-sm">
               <Upload className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-semibold text-slate-100 text-base">Import Claude Conversations</h3>
-              <p className="text-xs text-slate-400">Phase 1 Data Ingestion Engine</p>
+              <h3 className="font-semibold text-[#141416] text-base tracking-tight">Import Claude Conversations</h3>
+              <p className="text-xs text-[#716f68]">Phase 1 Data Ingestion Engine</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-200 p-1 rounded-lg transition-colors"
+            className="text-[#716f68] hover:text-[#141416] p-1 rounded-lg transition-colors active:scale-90"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+        {/* Tab Switcher (Claude Segmented Pills) */}
+        <div className="flex bg-[#f0eee6] p-1 rounded-full border border-[#e5e0d8] text-xs">
           <button
             onClick={() => setActiveTab('bridge')}
-            className={`flex-1 py-2 rounded-lg font-medium transition-all flex items-center justify-center space-x-1.5 ${
+            className={`flex-1 py-1.5 rounded-full font-medium transition-all duration-200 flex items-center justify-center space-x-1.5 ${
               activeTab === 'bridge'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-[#cc5a36] text-white font-medium shadow-sm'
+                : 'text-[#6b6963] hover:text-[#1f1e1d]'
             }`}
           >
             <Zap className="w-3.5 h-3.5" />
@@ -219,10 +219,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('link')}
-            className={`flex-1 py-2 rounded-lg font-medium transition-all flex items-center justify-center space-x-1.5 ${
+            className={`flex-1 py-1.5 rounded-full font-medium transition-all duration-200 flex items-center justify-center space-x-1.5 ${
               activeTab === 'link'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-[#cc5a36] text-white font-medium shadow-sm'
+                : 'text-[#6b6963] hover:text-[#1f1e1d]'
             }`}
           >
             <LinkIcon className="w-3.5 h-3.5" />
@@ -230,10 +230,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('zip')}
-            className={`flex-1 py-2 rounded-lg font-medium transition-all flex items-center justify-center space-x-1.5 ${
+            className={`flex-1 py-1.5 rounded-full font-medium transition-all duration-200 flex items-center justify-center space-x-1.5 ${
               activeTab === 'zip'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-[#cc5a36] text-white font-medium shadow-sm'
+                : 'text-[#6b6963] hover:text-[#1f1e1d]'
             }`}
           >
             <FileCode className="w-3.5 h-3.5" />
@@ -241,10 +241,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('paste')}
-            className={`flex-1 py-2 rounded-lg font-medium transition-all flex items-center justify-center space-x-1.5 ${
+            className={`flex-1 py-1.5 rounded-full font-medium transition-all duration-200 flex items-center justify-center space-x-1.5 ${
               activeTab === 'paste'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-[#cc5a36] text-white font-medium shadow-sm'
+                : 'text-[#6b6963] hover:text-[#1f1e1d]'
             }`}
           >
             <Clipboard className="w-3.5 h-3.5" />
@@ -261,8 +261,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         {activeTab === 'link' && (
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-medium text-slate-300 flex items-center space-x-1.5">
-                <Globe className="w-3.5 h-3.5 text-amber-400" />
+              <label className="text-xs font-medium text-[#141416] flex items-center space-x-1.5">
+                <Globe className="w-3.5 h-3.5 text-[#141416]" />
                 <span>Paste Public Claude Share Link:</span>
               </label>
               <div className="relative">
@@ -271,26 +271,26 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                   value={shareUrl}
                   onChange={(e) => setShareUrl(e.target.value)}
                   placeholder="https://claude.ai/share/791d8870-1931-45eb-a7b7-3110f50c4940"
-                  className="w-full bg-slate-950 border border-slate-800 text-amber-300 text-xs rounded-xl pl-3 pr-10 py-2.5 focus:outline-none focus:border-amber-500 font-mono"
+                  className="w-full bg-[#ffffff] border border-[#e5e2d8] text-[#141416] text-xs rounded-xl pl-3 pr-10 py-2.5 focus:outline-none focus:border-[#141416] font-mono shadow-sm"
                 />
                 {shareUrl && (
                   <button
                     onClick={() => setShareUrl('')}
-                    className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
+                    className="absolute right-3 top-3 text-[#716f68] hover:text-[#141416]"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
-              <p className="text-[11px] text-slate-500">
-                Paste any public share link like <code className="text-amber-300/90 font-mono bg-slate-950 px-1 py-0.5 rounded border border-slate-800">https://claude.ai/share/...</code>
+              <p className="text-[11px] text-[#716f68]">
+                Paste any public share link like <code className="text-[#141416] font-mono bg-[#f3f2ec] px-1 py-0.5 rounded border border-[#e5e2d8]">https://claude.ai/share/...</code>
               </p>
             </div>
 
             <button
               onClick={handleShareUrlSubmit}
               disabled={!shareUrl.trim() || isLoading}
-              className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center space-x-2 shadow-md shadow-amber-950/30"
+              className="w-full py-2.5 bg-[#141416] hover:bg-[#27272a] disabled:opacity-50 text-white rounded-full text-xs font-semibold transition-all duration-200 flex items-center justify-center space-x-2 shadow-sm"
             >
               {isLoading ? (
                 <>
@@ -299,7 +299,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4" />
+                  <Sparkles className="w-4 h-4 text-amber-400" />
                   <span>Import Shared Claude Link</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </>
@@ -308,27 +308,27 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
             {/* Cloudflare Help Card if blocked */}
             {importResult && !importResult.success && (
-              <div className="p-3 bg-slate-950 border border-amber-500/30 rounded-xl space-y-2 text-xs text-slate-300">
-                <div className="flex items-center space-x-1.5 font-medium text-amber-400">
-                  <AlertTriangle className="w-4 h-4" />
+              <div className="p-3 bg-[#faf1ec] border border-[#f0d5cb] rounded-xl space-y-2 text-xs text-[#1f1e1d]">
+                <div className="flex items-center space-x-1.5 font-medium text-[#b84b29]">
+                  <AlertTriangle className="w-4 h-4 text-[#cc5a36]" />
                   <span>Cloudflare Protection Detected</span>
                 </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Anthropic's server blocks direct automated server fetches to <code className="text-amber-300 font-mono">{shareUrl}</code>.
+                <p className="text-[11px] text-[#6b6963] leading-relaxed">
+                  Anthropic's server blocks direct automated server fetches to <code className="text-[#1f1e1d] font-mono">{shareUrl}</code>.
                 </p>
                 <div className="pt-1 flex items-center space-x-2">
                   <a
                     href={shareUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-[11px] font-medium transition-colors flex items-center space-x-1"
+                    className="px-3 py-1.5 bg-[#ffffff] hover:bg-[#faf9f5] text-[#1f1e1d] border border-[#e8e5dd] rounded-full text-[11px] font-medium transition-colors flex items-center space-x-1 shadow-sm"
                   >
                     <span>1. Open Link in Browser</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                   <button
                     onClick={() => setActiveTab('paste')}
-                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[11px] font-medium transition-colors"
+                    className="px-3 py-1.5 bg-[#cc5a36] hover:bg-[#b84b29] text-white rounded-full text-[11px] font-medium transition-colors shadow-sm"
                   >
                     2. Copy Chat Text & Paste Here
                   </button>
@@ -346,8 +346,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             onDrop={handleDrop}
             className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${
               dragActive
-                ? 'border-amber-500 bg-amber-950/20'
-                : 'border-slate-800 hover:border-slate-700 bg-slate-950/60'
+                ? 'border-[#cc5a36] bg-[#faf1ec]'
+                : 'border-[#e8e5dd] hover:border-[#cc5a36] bg-[#faf9f5]'
             }`}
           >
             <input
@@ -358,18 +358,18 @@ export const ImportModal: React.FC<ImportModalProps> = ({
               id="file-upload-input"
             />
             <label htmlFor="file-upload-input" className="cursor-pointer space-y-3 block">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto shadow-md">
+              <div className="w-12 h-12 rounded-2xl bg-[#ebe8df] text-[#141416] flex items-center justify-center mx-auto shadow-sm">
                 <Upload className="w-6 h-6" />
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-medium text-slate-200">
-                  Drop your Claude <code className="text-xs text-amber-300 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">conversations.json</code> or <code className="text-xs text-amber-300 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">.zip</code>
+                <p className="text-sm font-semibold text-[#141416]">
+                  Drop your Claude <code className="text-xs bg-[#ffffff] px-1.5 py-0.5 rounded border border-[#e5e2d8] text-[#141416]">conversations.json</code> or <code className="text-xs bg-[#ffffff] px-1.5 py-0.5 rounded border border-[#e5e2d8] text-[#141416]">.zip</code>
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[#716f68]">
                   Supports official Anthropic export zips, raw JSON, or txt files.
                 </p>
               </div>
-              <span className="inline-block px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors">
+              <span className="inline-block px-4 py-1.5 bg-[#141416] hover:bg-[#27272a] text-white rounded-full text-xs font-medium transition-colors shadow-sm">
                 Browse Files
               </span>
             </label>
@@ -384,19 +384,19 @@ export const ImportModal: React.FC<ImportModalProps> = ({
               value={customTitle}
               onChange={(e) => setCustomTitle(e.target.value)}
               placeholder="Conversation Title (Optional)"
-              className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500"
+              className="w-full bg-[#ffffff] border border-[#e5e2d8] text-[#141416] text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-[#141416] shadow-sm"
             />
             <textarea
               value={pastedText}
               onChange={(e) => setPastedText(e.target.value)}
               rows={6}
               placeholder="Paste your chat text copied directly from Claude here... (e.g. User: ... / Claude: ...)"
-              className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl p-3 focus:outline-none focus:border-amber-500 font-mono scrollbar-thin scrollbar-thumb-slate-800 placeholder-slate-600"
+              className="w-full bg-[#ffffff] border border-[#e5e2d8] text-[#141416] text-xs rounded-xl p-3 focus:outline-none focus:border-[#141416] font-mono scrollbar-thin placeholder-[#9ca3af] shadow-sm"
             />
             <button
               onClick={handlePasteSubmit}
               disabled={!pastedText.trim() || isLoading}
-              className="w-full py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center space-x-1"
+              className="w-full py-2.5 bg-[#141416] hover:bg-[#27272a] disabled:opacity-50 text-white rounded-full text-xs font-semibold transition-colors flex items-center justify-center space-x-1.5 shadow-sm"
             >
               <span>Parse & Import Real Transcript</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -409,15 +409,15 @@ export const ImportModal: React.FC<ImportModalProps> = ({
           <div
             className={`p-4 rounded-xl border text-xs space-y-1 ${
               importResult.success
-                ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
-                : 'bg-red-950/30 border-red-500/30 text-red-300'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-red-50 border-red-200 text-red-800'
             }`}
           >
             <div className="flex items-center space-x-2 font-medium">
               {importResult.success ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               ) : (
-                <AlertTriangle className="w-4 h-4 text-red-400" />
+                <AlertTriangle className="w-4 h-4 text-red-600" />
               )}
               <span>{importResult.message}</span>
             </div>

@@ -8,21 +8,20 @@ import { getAllConversations, saveConversations, deleteConversation, clearAllCon
 import { ConversationList } from '@/phase1/components/ConversationList';
 import { ImportModal } from '@/phase1/components/ImportModal';
 import { computeAnalytics } from '../analyticsEngine';
-import { ConversationAnalytics } from '../types';
+import { ConversationAnalytics, SentimentScore, PromptEvaluation } from '../types';
 import { StatsCards } from './StatsCards';
 import { ActivityHeatmap } from './ActivityHeatmap';
 import { SentimentChart } from './SentimentChart';
 import { CodeStatsPanel } from './CodeStatsPanel';
 import { TokenAnalyticsPanel } from './TokenAnalyticsPanel';
+import { UnifiedHeader } from '@/components/UnifiedHeader';
 import {
   BarChart2,
   Sparkles,
-  Layers,
   Download,
-  Globe,
-  ShieldCheck,
-  ListFilter,
-  Share2,
+  CheckCircle2,
+  Brain,
+  Zap,
 } from 'lucide-react';
 import { readSession, writeSession } from '@/store/workflowSession';
 
@@ -125,10 +124,102 @@ export const AnalyticsDashboard: React.FC = () => {
   const currentConversation: UnifiedConversation | null =
     conversations.find((c) => c.id === selectedId) || null;
 
+  // Per-conversation caches: convId -> map
+  const [sentimentsCache, setSentimentsCache] = useState<Record<string, Record<string, SentimentScore>>>({});
+  const [evaluationsCache, setEvaluationsCache] = useState<Record<string, Record<string, PromptEvaluation>>>({});
+  const [isAnalyzingSentiment, setIsAnalyzingSentiment] = useState(false);
+  const [isEvaluatingPrompts, setIsEvaluatingPrompts] = useState(false);
+
+  const currentSentimentMap = currentConversation ? sentimentsCache[currentConversation.id] || null : null;
+  const currentEvaluationsMap = currentConversation ? evaluationsCache[currentConversation.id] || null : null;
+
+  const hasEvaluatedSentiment = Boolean(currentSentimentMap && Object.keys(currentSentimentMap).length > 0);
+  const hasEvaluatedPrompts = Boolean(currentEvaluationsMap && Object.keys(currentEvaluationsMap).length > 0);
+  const hasEvaluatedAny = hasEvaluatedSentiment || hasEvaluatedPrompts;
+
+  // On-demand Sentiment Analysis (evaluates ONLY currentConversation.messages)
+  const handleAnalyzeSentimentWithAI = async () => {
+    if (!currentConversation || currentConversation.messages.length === 0) return;
+    setIsAnalyzingSentiment(true);
+    try {
+      console.log(`[AnalyticsDashboard] On-demand AI Sentiment requested for ${currentConversation.messages.length} messages in chat: ${currentConversation.id}`);
+      const payload = currentConversation.messages.map((m) => ({
+        id: m.id,
+        content: m.content,
+        sender: m.sender
+      }));
+      const res = await fetch('/api/ai/sentiment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: payload })
+      });
+      if (!res.ok) {
+        console.warn(`[AnalyticsDashboard] /api/ai/sentiment returned HTTP ${res.status}`);
+        return;
+      }
+      const data = await res.json();
+      if (data.success && data.sentimentMap) {
+        setSentimentsCache((prev) => ({
+          ...prev,
+          [currentConversation.id]: data.sentimentMap
+        }));
+        console.log('[AnalyticsDashboard] ✅ AI Sentiment analysis loaded via Groq/Gemini for', Object.keys(data.sentimentMap).length, 'messages');
+      }
+    } catch (err) {
+      console.warn('[AnalyticsDashboard] AI sentiment fetch failed:', err);
+    } finally {
+      setIsAnalyzingSentiment(false);
+    }
+  };
+
+  // On-demand Prompt Advisor (evaluates ONLY currentConversation user prompts)
+  const handleEvaluatePromptsWithAI = async () => {
+    if (!currentConversation) return;
+    const userMessages = currentConversation.messages.filter((m) => m.sender === 'user');
+    if (userMessages.length === 0) return;
+
+    setIsEvaluatingPrompts(true);
+    try {
+      console.log(`[AnalyticsDashboard] On-demand AI Prompt Evaluation requested for ${userMessages.length} user prompts in chat: ${currentConversation.id}`);
+      const prompts = userMessages.map((m) => ({ id: m.id, content: m.content }));
+      const res = await fetch('/api/ai/advisor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompts })
+      });
+
+      if (!res.ok) {
+        console.warn(`[AnalyticsDashboard] /api/ai/advisor returned HTTP ${res.status}`);
+        return;
+      }
+
+      const data = await res.json();
+      if (data.success && data.results) {
+        setEvaluationsCache((prev) => ({
+          ...prev,
+          [currentConversation.id]: data.results
+        }));
+        console.log(`[AnalyticsDashboard] ✅ AI Prompt Evaluations received for ${Object.keys(data.results).length} prompts in chat: ${currentConversation.id}`);
+      }
+    } catch (err) {
+      console.error('[AnalyticsDashboard] Error evaluating prompts:', err);
+    } finally {
+      setIsEvaluatingPrompts(false);
+    }
+  };
+
+  // Combined Master Evaluation: Evaluates both Prompts (Tokens) and Sentiment for the active chat
+  const handleEvaluateAllWithAI = async () => {
+    await Promise.allSettled([
+      handleEvaluatePromptsWithAI(),
+      handleAnalyzeSentimentWithAI()
+    ]);
+  };
+
   const analytics: ConversationAnalytics | null = useMemo(() => {
     if (!currentConversation) return null;
-    return computeAnalytics(currentConversation, currentConversation.messages);
-  }, [currentConversation]);
+    return computeAnalytics(currentConversation, currentConversation.messages, currentSentimentMap || undefined);
+  }, [currentConversation, currentSentimentMap]);
 
   const handleSelectConversation = (id: string) => {
     setSelectedId(id);
@@ -160,9 +251,9 @@ export const AnalyticsDashboard: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+      <div className="h-screen bg-[#f3f2ec] flex items-center justify-center text-[#716f68]">
         <div className="flex items-center space-x-2">
-          <Sparkles className="w-5 h-5 text-violet-500 animate-spin" />
+          <Sparkles className="w-5 h-5 text-[#141416] animate-spin" />
           <span>Loading Conversation Analytics…</span>
         </div>
       </div>
@@ -170,43 +261,23 @@ export const AnalyticsDashboard: React.FC = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-slate-950 text-slate-100 font-sans overflow-hidden">
-      {/* ── Top Navbar ── */}
-      <header className="h-14 border-b border-slate-800 bg-slate-900/90 px-6 flex items-center justify-between backdrop-blur-md select-none z-20">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-violet-600 to-sky-500 flex items-center justify-center text-white shadow-md">
-            <BarChart2 className="w-4 h-4" />
+    <div className="h-screen flex flex-col bg-[#f3f2ec] text-[#141416] font-sans overflow-hidden">
+      {/* Keystone Unified Header */}
+      <UnifiedHeader
+        currentPhase={5}
+        title="Conversation Analytics"
+        subtitle={
+          currentConversation
+            ? `${currentConversation.title} · ${analytics?.totalMessages || 0} messages`
+            : 'Deep insights into your conversation'
+        }
+        rightAction={
+          <div className="hidden sm:flex items-center space-x-1.5 px-3 py-1 rounded-full bg-white border border-[#e5e2d8] text-xs text-[#141416] shadow-sm">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#141416] animate-keystone-pulse" />
+            <span>Real-Time Intelligence</span>
           </div>
-          <div>
-            <h1 className="font-bold text-sm text-slate-100 leading-tight">
-              Conversation Analytics
-            </h1>
-            <p className="text-[11px] text-slate-400">Deep insights into your conversation</p>
-          </div>
-        </div>
-
-        {/* Phase Navigation */}
-        <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
-          {[
-            { href: '/phase1', label: 'Conversation Reader', icon: <Layers className="w-3 h-3" /> },
-            { href: '/phase2', label: 'Message Filter', icon: <ListFilter className="w-3 h-3" /> },
-            { href: '/phase3', label: 'Privacy & Export', icon: <ShieldCheck className="w-3 h-3" /> },
-            { href: '/phase4', label: 'Share Link Generator', icon: <Share2 className="w-3 h-3" /> },
-          ].map(({ href, label, icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors flex items-center space-x-1"
-            >
-              {icon}<span>{label}</span>
-            </Link>
-          ))}
-          <span className="px-3 py-1.5 rounded-lg bg-violet-600 text-white font-medium shadow-sm flex items-center space-x-1">
-            <BarChart2 className="w-3.5 h-3.5 text-violet-200" />
-            <span>Conversation Analytics</span>
-          </span>
-        </div>
-      </header>
+        }
+      />
 
       {/* ── Main Layout ── */}
       <div className="flex-1 flex overflow-hidden">
@@ -224,44 +295,68 @@ export const AnalyticsDashboard: React.FC = () => {
         {/* Main Panel */}
         {analytics ? (
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Sub-tabs */}
-            <div className="flex items-center space-x-1 px-6 py-3 border-b border-slate-800 bg-slate-900/50 overflow-x-auto">
-              {TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-                    activeTab === tab.id
-                      ? 'bg-violet-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            {/* Sub-tabs (Claude Segmented Pill Bar) */}
+            <div className="flex items-center space-x-2 px-6 py-3 border-b border-[#e8e5dd] bg-[#faf9f5]/80 backdrop-blur-md overflow-x-auto flex-shrink-0">
+              <div className="flex items-center space-x-1 bg-[#f0eee6] p-1 rounded-full border border-[#e5e0d8]">
+                {TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all duration-200 cursor-pointer ${
+                      activeTab === tab.id
+                        ? 'bg-[#1f1e1d] text-white shadow-sm'
+                        : 'text-[#6b6963] hover:text-[#1f1e1d]'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
 
               <div className="flex-1" />
 
               {/* Export button */}
               <button
                 onClick={() => exportAnalyticsReport(analytics)}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium transition-colors"
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-[#ebe8df] border border-[#e5e2d8] text-[#141416] text-xs font-medium transition-all duration-200 shadow-sm active:scale-95"
               >
-                <Download className="w-3.5 h-3.5" />
+                <Download className="w-3.5 h-3.5 text-[#716f68]" />
                 <span>Export Report</span>
               </button>
             </div>
 
             {/* Tab content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-slate-800">
-              {/* Conversation heading */}
-              <div className="flex items-center justify-between">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-stone-300">
+              {/* Conversation heading & On-Demand AI Action */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[#e5e2d8]/60">
                 <div>
-                  <h2 className="text-base font-bold text-slate-100">{analytics.title}</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <h2 className="text-base font-bold text-[#141416]">{analytics.title}</h2>
+                  <p className="text-xs text-[#716f68] mt-0.5">
                     {analytics.dateRange.start} → {analytics.dateRange.end} ·{' '}
                     {analytics.totalMessages} messages
                   </p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={handleEvaluateAllWithAI}
+                    disabled={isEvaluatingPrompts || isAnalyzingSentiment}
+                    className="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-[#141416] hover:bg-[#2e2d2a] text-white text-xs font-medium transition-all duration-200 shadow-sm active:scale-95 disabled:opacity-60 cursor-pointer"
+                  >
+                    {isEvaluatingPrompts || isAnalyzingSentiment ? (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 animate-spin text-[#f5a623]" />
+                        <span>Evaluating This Chat...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-[#f5a623]" />
+                        <span>
+                          {hasEvaluatedAny ? '↻ Re-evaluate Chat with AI' : '✨ Evaluate Chat with AI'}
+                        </span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -284,7 +379,12 @@ export const AnalyticsDashboard: React.FC = () => {
 
               {/* ── TOKENS & COST TAB ── */}
               {activeTab === 'tokens' && currentConversation && (
-                <TokenAnalyticsPanel conversation={currentConversation} />
+                <TokenAnalyticsPanel
+                  conversation={currentConversation}
+                  evaluations={currentEvaluationsMap}
+                  onEvaluatePrompts={handleEvaluatePromptsWithAI}
+                  isEvaluatingPrompts={isEvaluatingPrompts}
+                />
               )}
 
               {/* ── SENTIMENT TAB ── */}
@@ -312,26 +412,91 @@ export const AnalyticsDashboard: React.FC = () => {
 
                 return (
                   <div className="space-y-4">
+                    {/* On-Demand Sentiment Action Banner */}
+                    {!hasEvaluatedSentiment ? (
+                      <div className="bg-[#faf9f5] border border-[#e8e5dd] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-start space-x-3.5">
+                          <div className="p-2.5 bg-[#faf1ec] border border-[#f0d5cb] rounded-xl text-[#cc5a36] mt-0.5">
+                            <Brain className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="font-claude-serif text-sm font-semibold text-[#1f1e1d] flex items-center space-x-2">
+                              <span>AI Conversational Tone & Sentiment Analyzer</span>
+                              <span className="px-2 py-0.5 bg-[#f0eee6] text-[#716f68] text-[10px] rounded-full font-mono">
+                                Groq / Gemini
+                              </span>
+                            </h4>
+                            <p className="text-xs text-[#6b6963] mt-1 max-w-xl leading-relaxed">
+                              Evaluate tone for this chat on-demand. Understands true technical nuances without false positives on words like &quot;no&quot;, &quot;error&quot;, or &quot;fail&quot;.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleAnalyzeSentimentWithAI}
+                          disabled={isAnalyzingSentiment}
+                          className="flex items-center space-x-2 px-4 py-2.5 rounded-full bg-[#1f1e1d] hover:bg-[#383734] text-white text-xs font-medium transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                        >
+                          {isAnalyzingSentiment ? (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5 animate-spin text-[#f5a623]" />
+                              <span>Analyzing Tone...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5 text-[#f5a623]" />
+                              <span>Analyze Tone With AI</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="bg-[#faf1ec] border border-[#f0d5cb] rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 rounded-xl bg-[#cc5a36]/10 border border-[#cc5a36]/20 text-[#b84b29] flex items-center justify-center">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-claude-serif text-xs font-semibold text-[#1f1e1d] flex items-center space-x-2">
+                              <span>AI Sentiment Analysis Active</span>
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] rounded-full font-mono font-medium">
+                                {Object.keys(currentSentimentMap || {}).length} messages scored
+                              </span>
+                            </h4>
+                            <p className="text-[11px] text-[#6b6963]">Tone evaluated strictly for this chat. Zero cross-conversation context leaks.</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleAnalyzeSentimentWithAI}
+                          disabled={isAnalyzingSentiment}
+                          className="px-3.5 py-1.5 rounded-full text-xs font-medium border border-[#e5e0d8] bg-white hover:bg-[#f0eee6] text-[#1f1e1d] transition-colors cursor-pointer disabled:opacity-60"
+                        >
+                          {isAnalyzingSentiment ? 'Analyzing...' : '↻ Re-analyze'}
+                        </button>
+                      </div>
+                    )}
+
                     <SentimentChart sentimentOverTime={data} />
 
                     {/* Controls row */}
-                    <div className="rounded-2xl border border-slate-700/50 bg-slate-900/60 overflow-hidden">
-                      <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
-                        <h3 className="text-sm font-semibold text-slate-100">
+                    <div className="rounded-2xl border border-[#e5e2d8] bg-white overflow-hidden shadow-sm">
+                      <div className="flex items-center justify-between px-5 py-3 border-b border-[#e5e2d8]">
+                        <h3 className="text-sm font-semibold text-[#141416]">
                           Sentiment Breakdown
-                          <span className="ml-2 text-xs font-normal text-slate-500">
+                          <span className="ml-2 text-xs font-normal text-[#716f68]">
                             {data.length} messages total
                           </span>
                         </h3>
                         <div className="flex items-center space-x-2 text-xs">
-                          <span className="text-slate-500">Show:</span>
+                          <span className="text-[#716f68]">Show:</span>
                           <select
                             value={sentimentPageSize}
                             onChange={(e) => {
                               setSentimentPageSize(Number(e.target.value));
                               setSentimentPage(1);
                             }}
-                            className="bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:border-violet-500 text-xs"
+                            className="bg-[#faf9f5] border border-[#e5e2d8] text-[#141416] rounded-full px-3 py-1 focus:outline-none focus:border-[#141416] text-xs"
                           >
                             {[10, 25, 50, 100].map((n) => (
                               <option key={n} value={n}>{n} per page</option>
@@ -344,7 +509,7 @@ export const AnalyticsDashboard: React.FC = () => {
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                           <thead>
-                            <tr className="text-slate-500 border-b border-slate-800 bg-slate-900/40">
+                            <tr className="text-[#716f68] border-b border-[#e5e2d8] bg-[#faf9f5]">
                               <th className="px-5 py-2.5 text-left font-medium w-12">#</th>
                               <th className="px-5 py-2.5 text-left font-medium">Sender</th>
                               <th className="px-5 py-2.5 text-left font-medium">Sentiment</th>
@@ -355,28 +520,28 @@ export const AnalyticsDashboard: React.FC = () => {
                             {pageSlice.map((row) => {
                               const colorClass =
                                 row.label === 'positive'
-                                  ? 'text-emerald-400'
+                                  ? 'text-emerald-700'
                                   : row.label === 'negative'
-                                  ? 'text-red-400'
-                                  : 'text-slate-400';
+                                  ? 'text-rose-700'
+                                  : 'text-[#716f68]';
                               const bgClass =
                                 row.label === 'positive'
-                                  ? 'bg-emerald-500/5'
+                                  ? 'bg-emerald-50/50'
                                   : row.label === 'negative'
-                                  ? 'bg-red-500/5'
+                                  ? 'bg-rose-50/50'
                                   : '';
                               return (
                                 <tr
                                   key={row.index}
-                                  className={`border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors ${bgClass}`}
+                                  className={`border-b border-[#e5e2d8]/60 hover:bg-[#faf9f5] transition-colors ${bgClass}`}
                                 >
-                                  <td className="px-5 py-2.5 text-slate-600 tabular-nums">{row.index}</td>
-                                  <td className="px-5 py-2.5 text-slate-400 capitalize">{row.sender}</td>
+                                  <td className="px-5 py-2.5 text-[#9ca3af] tabular-nums font-mono">{row.index}</td>
+                                  <td className="px-5 py-2.5 text-[#141416] capitalize font-medium">{row.sender}</td>
                                   <td className={`px-5 py-2.5 capitalize font-medium ${colorClass}`}>
                                     <span className="flex items-center space-x-1.5">
                                       <span className={`w-1.5 h-1.5 rounded-full inline-block ${
-                                        row.label === 'positive' ? 'bg-emerald-400' :
-                                        row.label === 'negative' ? 'bg-red-400' : 'bg-slate-500'
+                                        row.label === 'positive' ? 'bg-emerald-500' :
+                                        row.label === 'negative' ? 'bg-rose-500' : 'bg-[#9ca3af]'
                                       }`} />
                                       <span>{row.label}</span>
                                     </span>
@@ -393,8 +558,8 @@ export const AnalyticsDashboard: React.FC = () => {
 
                       {/* Pagination footer */}
                       {totalPages > 1 && (
-                        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-800">
-                          <p className="text-xs text-slate-500">
+                        <div className="flex items-center justify-between px-5 py-3 border-t border-[#e5e2d8]">
+                          <p className="text-xs text-[#716f68]">
                             Showing {(safePage - 1) * sentimentPageSize + 1}–{Math.min(safePage * sentimentPageSize, data.length)} of {data.length}
                           </p>
                           <div className="flex items-center space-x-1">
@@ -402,7 +567,7 @@ export const AnalyticsDashboard: React.FC = () => {
                             <button
                               onClick={() => setSentimentPage((p) => Math.max(1, p - 1))}
                               disabled={safePage === 1}
-                              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              className="px-3 py-1.5 rounded-full text-xs font-medium border border-[#e5e2d8] bg-white text-[#716f68] hover:text-[#141416] hover:border-[#141416] disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
                             >
                               Previous
                             </button>
@@ -410,15 +575,15 @@ export const AnalyticsDashboard: React.FC = () => {
                             {/* Page numbers */}
                             {buildPages().map((p, i) =>
                               p === '...' ? (
-                                <span key={`ellipsis-${i}`} className="px-2 text-slate-600 text-xs select-none">…</span>
+                                <span key={`ellipsis-${i}`} className="px-2 text-[#9ca3af] text-xs select-none">…</span>
                               ) : (
                                 <button
                                   key={p}
                                   onClick={() => setSentimentPage(p as number)}
-                                  className={`min-w-[32px] py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                  className={`min-w-[32px] py-1.5 rounded-full text-xs font-medium transition-colors shadow-sm ${
                                     safePage === p
-                                      ? 'bg-violet-600 text-white shadow-sm'
-                                      : 'border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600'
+                                      ? 'bg-[#141416] text-white'
+                                      : 'border border-[#e5e2d8] bg-white text-[#716f68] hover:text-[#141416] hover:border-[#141416]'
                                   }`}
                                 >
                                   {p}
@@ -430,7 +595,7 @@ export const AnalyticsDashboard: React.FC = () => {
                             <button
                               onClick={() => setSentimentPage((p) => Math.min(totalPages, p + 1))}
                               disabled={safePage === totalPages}
-                              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              className="px-3 py-1.5 rounded-full text-xs font-medium border border-[#e5e2d8] bg-white text-[#716f68] hover:text-[#141416] hover:border-[#141416] disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
                             >
                               Next
                             </button>
@@ -458,12 +623,12 @@ export const AnalyticsDashboard: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500 space-y-4">
-            <BarChart2 className="w-12 h-12 text-slate-700" />
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-[#716f68] space-y-4">
+            <BarChart2 className="w-12 h-12 text-[#9ca3af]" />
             <p className="text-sm">Select a conversation to view its analytics.</p>
             <button
               onClick={handleLoadSamples}
-              className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-medium transition-colors"
+              className="px-4 py-2 bg-[#141416] hover:bg-[#27272a] text-white rounded-full text-xs font-medium transition-colors shadow-sm"
             >
               Load Demo Data
             </button>

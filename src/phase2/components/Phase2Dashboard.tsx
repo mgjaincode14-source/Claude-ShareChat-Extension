@@ -13,6 +13,7 @@ import { getSelectionSummary, getDateBoundaries, filterMessagesBySelection } fro
 import { SelectionToolbar } from './SelectionToolbar';
 import { SelectionSummaryPanel } from './SelectionSummaryPanel';
 import { SelectiveMessageViewer } from './SelectiveMessageViewer';
+import { UnifiedHeader } from '@/components/UnifiedHeader';
 import { 
   CheckCircle2, 
   Layers, 
@@ -229,59 +230,23 @@ export const Phase2Dashboard: React.FC = () => {
   const summary: SelectionSummary = getSelectionSummary(currentConversation, selectionOptions);
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
-      {/* Navigation Header */}
-      <header className="h-12 border-b border-slate-800/80 bg-slate-900/80 px-4 flex items-center justify-between text-xs flex-shrink-0 z-20">
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 font-semibold">
-            <ListFilter className="w-3.5 h-3.5" />
-            <span>Message Filter</span>
+    <div className="flex flex-col h-screen bg-[#f3f2ec] text-[#141416] font-sans overflow-hidden">
+      {/* Keystone Unified Header */}
+      <UnifiedHeader
+        currentPhase={2}
+        title="Message Selection Filter"
+        subtitle={
+          currentConversation
+            ? `${summary.totalSelected} of ${summary.totalMessagesInConv} messages selected`
+            : 'Select messages to share or export'
+        }
+        rightAction={
+          <div className="hidden sm:flex items-center space-x-1.5 px-3 py-1 rounded-full bg-[#ffffff] border border-[#e5e2d8] text-xs text-[#716f68] shadow-sm">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="text-[#141416] font-medium">Local Timezone Filtering</span>
           </div>
-
-          {/* Phase Navigation Tabs */}
-          <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800 ml-4">
-            <Link
-              href="/phase1"
-              className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
-            >
-              <Layers className="w-3 h-3" />
-              <span>Conversation Reader</span>
-            </Link>
-            <span className="px-2.5 py-1 bg-amber-600 text-white font-medium rounded text-xs shadow-sm flex items-center space-x-1">
-              <ListFilter className="w-3 h-3" />
-              <span>Message Filter</span>
-            </span>
-            <Link
-              href="/phase3"
-              className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
-            >
-              <ShieldCheck className="w-3 h-3" />
-              <span>Privacy & Export</span>
-            </Link>
-            <Link
-              href="/phase4"
-              className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
-            >
-              <Share2 className="w-3 h-3" />
-              <span>Share Link Generator</span>
-            </Link>
-            <Link
-              href="/phase5"
-              className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded text-xs transition-colors flex items-center space-x-1"
-            >
-              <BarChart2 className="w-3 h-3" />
-              <span>Analytics</span>
-            </Link>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-2 text-slate-400 text-xs">
-          <span className="flex items-center space-x-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-            <span>Timezone-Aware Local Filtering</span>
-          </span>
-        </div>
-      </header>
+        }
+      />
 
       {/* Main Workspace */}
       <div className="flex-1 flex overflow-hidden">
@@ -304,7 +269,7 @@ export const Phase2Dashboard: React.FC = () => {
         />
 
         {/* Selective View & Control Workspace */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
+        <div className="flex-1 flex flex-col overflow-hidden bg-[#f3f2ec]">
           <SelectionToolbar
             conversation={currentConversation}
             options={selectionOptions}

@@ -47,14 +47,14 @@ const CustomTooltip = ({
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   const color =
-    p.label === 'positive' ? '#34d399' : p.label === 'negative' ? '#f87171' : '#94a3b8';
+    p.label === 'positive' ? '#10b981' : p.label === 'negative' ? '#f43f5e' : '#9ca3af';
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-xs shadow-xl">
-      <p className="text-slate-400 mb-1">Message #{label}</p>
-      <p className="capitalize" style={{ color }}>
+    <div className="bg-white border border-[#e5e2d8] rounded-xl p-3 text-xs shadow-md text-[#141416]">
+      <p className="text-[#716f68] mb-1 font-mono">Message #{label}</p>
+      <p className="capitalize font-semibold" style={{ color }}>
         {p.label} ({p.score > 0 ? '+' : ''}{p.score})
       </p>
-      <p className="text-slate-500 mt-0.5 capitalize">{p.sender}</p>
+      <p className="text-[#9ca3af] mt-0.5 capitalize">{p.sender}</p>
     </div>
   );
 };
@@ -71,28 +71,28 @@ export const SentimentChart: React.FC<SentimentChartProps> = ({ sentimentOverTim
   const total = sentimentOverTime.length;
 
   return (
-    <div className="rounded-2xl border border-slate-700/50 bg-slate-900/60 p-5 backdrop-blur-sm">
+    <div className="rounded-2xl border border-[#e5e2d8] bg-white p-5 shadow-sm text-[#141416]">
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-slate-100">Sentiment Trend</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Tone of messages over the conversation</p>
+          <h3 className="text-sm font-semibold text-[#141416]">Sentiment Trend</h3>
+          <p className="text-xs text-[#716f68] mt-0.5">Tone of messages over the conversation</p>
         </div>
         <div className="flex items-center space-x-3 text-xs">
           <span className="flex items-center space-x-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-            <span className="text-slate-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+            <span className="text-[#716f68]">
               {total > 0 ? Math.round((positiveCount / total) * 100) : 0}% positive
             </span>
           </span>
           <span className="flex items-center space-x-1">
-            <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
-            <span className="text-slate-400">
+            <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+            <span className="text-[#716f68]">
               {total > 0 ? Math.round((negativeCount / total) * 100) : 0}% negative
             </span>
           </span>
           <span className="flex items-center space-x-1">
-            <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
-            <span className="text-slate-400">
+            <span className="w-2 h-2 rounded-full bg-[#9ca3af] inline-block" />
+            <span className="text-[#716f68]">
               {total > 0 ? Math.round((neutralCount / total) * 100) : 0}% neutral
             </span>
           </span>
@@ -102,30 +102,30 @@ export const SentimentChart: React.FC<SentimentChartProps> = ({ sentimentOverTim
       <div className="h-52">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#f3f2ec" vertical={false} />
             <XAxis
               dataKey="index"
-              tick={{ fill: '#64748b', fontSize: 10 }}
+              tick={{ fill: '#9ca3af', fontSize: 10 }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis
               domain={[-1, 1]}
-              tick={{ fill: '#64748b', fontSize: 10 }}
+              tick={{ fill: '#9ca3af', fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               width={28}
               tickFormatter={(v: number) => v.toFixed(1)}
             />
-            <ReferenceLine y={0} stroke="#334155" strokeDasharray="4 4" />
+            <ReferenceLine y={0} stroke="#e5e2d8" strokeDasharray="4 4" />
             <Tooltip content={<CustomTooltip />} />
             <Line
               type="monotone"
               dataKey="score"
-              stroke="#6366f1"
+              stroke="#141416"
               strokeWidth={2}
               dot={<CustomDot />}
-              activeDot={{ r: 5, fill: '#6366f1' }}
+              activeDot={{ r: 5, fill: '#141416' }}
             />
           </LineChart>
         </ResponsiveContainer>

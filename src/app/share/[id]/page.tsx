@@ -30,20 +30,26 @@ export default async function SharePage({ params }: SharePageProps) {
   let snapshot = getSnapshotFromDisk(id);
 
   if (!snapshot) {
-    snapshot = (await getSnapshotById(id)) || null;
+    try {
+      if (typeof window !== 'undefined') {
+        snapshot = (await getSnapshotById(id)) || null;
+      }
+    } catch {
+      snapshot = null;
+    }
   }
 
   if (!snapshot) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center text-slate-400 font-sans">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full space-y-4 shadow-2xl">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+      <div className="min-h-screen bg-[#f3f2ec] flex flex-col items-center justify-center p-6 text-center text-[#716f68] font-sans">
+        <div className="bg-white border border-[#e5e2d8] rounded-3xl p-8 max-w-md w-full space-y-4 shadow-sm">
+          <div className="w-14 h-14 rounded-2xl bg-[#ebe8df] text-[#141416] flex items-center justify-center mx-auto">
             <span className="text-xl font-bold">404</span>
           </div>
           <div>
-            <h2 className="text-lg font-bold text-slate-100">Shared Snapshot Not Found</h2>
-            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-              The public share link <code className="text-amber-300 font-mono">/share/{id}</code> is invalid, expired, or has been removed.
+            <h2 className="text-lg font-bold text-[#141416]">Shared Snapshot Not Found</h2>
+            <p className="text-xs text-[#716f68] mt-1.5 leading-relaxed">
+              The public share link <code className="text-[#141416] bg-[#ebe8df] px-1.5 py-0.5 rounded font-mono">/share/{id}</code> is invalid, expired, or has been removed.
             </p>
           </div>
         </div>

@@ -11,10 +11,9 @@ import {
   FileJson, 
   Globe, 
   FileText, 
-  SlidersHorizontal,
-  Sparkles,
   Cpu
 } from 'lucide-react';
+import { ClaudeIcon } from '@/components/ClaudeIcon';
 
 interface ExportOptionsToolbarProps {
   options: ExportOptions;
@@ -40,18 +39,21 @@ export const ExportOptionsToolbar: React.FC<ExportOptionsToolbarProps> = ({
   };
 
   const formats: { id: ExportFormat; label: string; icon: any; ext: string }[] = [
+    { id: 'claude-chat', label: 'Claude Chat', icon: ClaudeIcon, ext: '.html' },
     { id: 'markdown', label: 'Markdown', icon: FileCode, ext: '.md' },
     { id: 'json', label: 'JSON Payload', icon: FileJson, ext: '.json' },
     { id: 'html', label: 'Standalone HTML', icon: Globe, ext: '.html' },
     { id: 'text', label: 'Plain Text', icon: FileText, ext: '.txt' }
   ];
 
+  const isHtmlFormat = options.format === 'html' || options.format === 'claude-chat';
+
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl select-none">
+    <div className="bg-white border border-[#e8e5dd] rounded-2xl p-4 sm:p-5 space-y-4 shadow-sm select-none text-[#1f1e1d]">
       {/* Top Format Tabs & Action Buttons */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Format Selector Tabs */}
-        <div className="flex items-center space-x-1 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+        <div className="flex items-center space-x-1 bg-[#f0eee6] p-1 rounded-full border border-[#e5e0d8]">
           {formats.map((f) => {
             const Icon = f.icon;
             const isActive = options.format === f.id;
@@ -60,10 +62,10 @@ export const ExportOptionsToolbar: React.FC<ExportOptionsToolbarProps> = ({
                 key={f.id}
                 type="button"
                 onClick={() => onChangeOptions({ ...options, format: f.id })}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5 ${
+                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 flex items-center space-x-1.5 active:scale-95 ${
                   isActive
-                    ? 'bg-amber-600 text-white shadow-md shadow-amber-950/30'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                    ? 'bg-[#1f1e1d] text-white shadow-sm'
+                    : 'text-[#6b6963] hover:text-[#1f1e1d]'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -79,90 +81,92 @@ export const ExportOptionsToolbar: React.FC<ExportOptionsToolbarProps> = ({
           <button
             type="button"
             onClick={onDownload}
-            className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-white font-semibold rounded-xl text-xs shadow-lg shadow-orange-950/30 transition-all flex items-center space-x-1.5"
+            className="px-5 py-2.5 bg-[#cc5a36] hover:bg-[#b84b29] active:scale-95 text-white font-medium rounded-full text-xs shadow-sm transition-all duration-200 flex items-center space-x-1.5"
           >
             <Download className="w-4 h-4" />
-            <span>Download {options.format.toUpperCase()}</span>
+            <span>
+              {options.format === 'claude-chat' ? 'Download Claude Chat (.html)' : `Download ${options.format.toUpperCase()}`}
+            </span>
           </button>
 
           <button
             type="button"
             onClick={handleCopyClick}
-            className="px-3 py-2 bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-800 rounded-xl text-xs transition-colors flex items-center space-x-1.5"
+            className="px-4 py-2.5 bg-white hover:bg-[#faf9f5] active:scale-95 text-[#1f1e1d] border border-[#e8e5dd] rounded-full text-xs transition-all duration-200 flex items-center space-x-1.5 shadow-sm"
           >
             {copied ? (
               <>
-                <Check className="w-4 h-4 text-emerald-400" />
-                <span className="text-emerald-400 font-medium">Copied!</span>
+                <Check className="w-4 h-4 text-emerald-600 animate-claude-scale" />
+                <span className="text-emerald-700 font-medium">Copied!</span>
               </>
             ) : (
               <>
-                <Copy className="w-4 h-4 text-slate-400" />
+                <Copy className="w-4 h-4 text-[#6b6963]" />
                 <span>Copy Content</span>
               </>
             )}
           </button>
 
-          {options.format === 'html' && (
+          {isHtmlFormat && (
             <button
               type="button"
               onClick={onOpenHtmlTab}
-              className="px-3 py-2 bg-amber-950/40 hover:bg-amber-900/40 text-amber-300 border border-amber-500/30 rounded-xl text-xs transition-colors flex items-center space-x-1.5"
-              title="Open full page HTML preview in a new tab"
+              className="px-4 py-2.5 bg-[#faf1ec] hover:bg-[#f6e5dc] active:scale-95 text-[#b84b29] border border-[#f0d5cb] rounded-full text-xs transition-all duration-200 flex items-center space-x-1.5 font-medium shadow-sm"
+              title="Open full page preview in a new browser tab"
             >
-              <ExternalLink className="w-4 h-4 text-amber-400" />
-              <span>Open HTML Tab</span>
+              <ExternalLink className="w-4 h-4 text-[#cc5a36]" />
+              <span>Open in New Tab</span>
             </button>
           )}
         </div>
       </div>
 
       {/* Formatting & Watermark Customization Controls */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-800/80 text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-[#e8e5dd] text-xs">
         {/* Toggle Metadata Header */}
-        <label className="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-xl border border-slate-800/80 cursor-pointer hover:border-slate-700">
-          <span className="text-slate-300 font-medium">Metadata Header</span>
-          <input
-            type="checkbox"
-            checked={options.includeMetadataHeader}
-            onChange={(e) => onChangeOptions({ ...options, includeMetadataHeader: e.target.checked })}
-            className="accent-amber-500 w-4 h-4 rounded cursor-pointer"
-          />
-        </label>
+        <div 
+          onClick={() => onChangeOptions({ ...options, includeMetadataHeader: !options.includeMetadataHeader })}
+          className="flex items-center justify-between p-3 bg-[#faf9f5] rounded-2xl border border-[#e8e5dd] cursor-pointer hover:bg-white hover:border-[#d9d5cb] transition-all duration-200"
+        >
+          <span className="text-[#1f1e1d] font-medium">Metadata Header</span>
+          <div className={`claude-toggle-track ${options.includeMetadataHeader ? 'bg-[#cc5a36]' : 'bg-[#d9d5cb]'}`}>
+            <div className={`claude-toggle-thumb ${options.includeMetadataHeader ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </div>
+        </div>
 
         {/* Toggle Timestamps */}
-        <label className="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-xl border border-slate-800/80 cursor-pointer hover:border-slate-700">
-          <span className="text-slate-300 font-medium">Timestamps</span>
-          <input
-            type="checkbox"
-            checked={options.includeTimestamp}
-            onChange={(e) => onChangeOptions({ ...options, includeTimestamp: e.target.checked })}
-            className="accent-amber-500 w-4 h-4 rounded cursor-pointer"
-          />
-        </label>
+        <div 
+          onClick={() => onChangeOptions({ ...options, includeTimestamp: !options.includeTimestamp })}
+          className="flex items-center justify-between p-3 bg-[#faf9f5] rounded-2xl border border-[#e8e5dd] cursor-pointer hover:bg-white hover:border-[#d9d5cb] transition-all duration-200"
+        >
+          <span className="text-[#1f1e1d] font-medium">Timestamps</span>
+          <div className={`claude-toggle-track ${options.includeTimestamp ? 'bg-[#cc5a36]' : 'bg-[#d9d5cb]'}`}>
+            <div className={`claude-toggle-thumb ${options.includeTimestamp ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </div>
+        </div>
 
-        {/* Toggle Sandbox Steps (Option 4) */}
-        <label className="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-xl border border-slate-800/80 cursor-pointer hover:border-slate-700">
-          <span className="text-slate-300 font-medium flex items-center space-x-1.5">
-            <Cpu className="w-3.5 h-3.5 text-amber-400" />
+        {/* Toggle Sandbox Steps */}
+        <div 
+          onClick={() => onChangeOptions({ ...options, includeSandboxSteps: !options.includeSandboxSteps })}
+          className="flex items-center justify-between p-3 bg-[#faf9f5] rounded-2xl border border-[#e8e5dd] cursor-pointer hover:bg-white hover:border-[#d9d5cb] transition-all duration-200"
+        >
+          <span className="text-[#1f1e1d] font-medium flex items-center space-x-1.5">
+            <Cpu className="w-3.5 h-3.5 text-[#6b6963]" />
             <span>Sandbox Activity</span>
           </span>
-          <input
-            type="checkbox"
-            checked={Boolean(options.includeSandboxSteps)}
-            onChange={(e) => onChangeOptions({ ...options, includeSandboxSteps: e.target.checked })}
-            className="accent-amber-500 w-4 h-4 rounded cursor-pointer"
-          />
-        </label>
+          <div className={`claude-toggle-track ${options.includeSandboxSteps ? 'bg-[#cc5a36]' : 'bg-[#d9d5cb]'}`}>
+            <div className={`claude-toggle-thumb ${options.includeSandboxSteps ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </div>
+        </div>
 
         {/* Watermark Input */}
-        <div className="flex items-center space-x-2 p-1.5 bg-slate-950/60 rounded-xl border border-slate-800/80">
+        <div className="flex items-center space-x-2 p-1.5 bg-[#faf9f5] rounded-2xl border border-[#e8e5dd] hover:bg-white hover:border-[#d9d5cb] transition-colors">
           <input
             type="text"
             value={options.watermarkText}
             onChange={(e) => onChangeOptions({ ...options, watermarkText: e.target.value })}
             placeholder="Watermark text..."
-            className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:border-amber-500/60"
+            className="w-full bg-white border border-[#e8e5dd] text-[#1f1e1d] text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#cc5a36] transition-colors"
           />
         </div>
       </div>

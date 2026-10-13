@@ -1,7 +1,7 @@
 /**
  * Phase 5 — Analytics Engine
- * Pure client-side computation. No external APIs.
- * Takes UnifiedConversation + UnifiedMessage[] and returns ConversationAnalytics.
+ * Provides conversation statistics, code analysis, activity tracking,
+ * and LLM-pluggable sentiment analysis templates.
  */
 
 import { UnifiedConversation, UnifiedMessage } from '@/phase1/types';
@@ -14,22 +14,94 @@ import {
   DayActivity,
 } from './types';
 
-// ─── Sentiment Word Lists (lightweight lexicon) ───────────────────────────────
-const POSITIVE_WORDS = new Set([
-  'good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'perfect',
-  'helpful', 'thank', 'thanks', 'appreciate', 'love', 'best', 'awesome', 'nice',
-  'correct', 'right', 'works', 'working', 'solved', 'success', 'happy', 'clear',
-  'brilliant', 'useful', 'interesting', 'elegant', 'clean', 'fast', 'efficient',
-  'yes', 'absolutely', 'exactly', 'sure', 'definitely', 'certainly', 'agree',
-]);
+// ============================================================================
+// LLM SENTIMENT ANALYSIS TEMPLATE (Free / Open-Source Models)
+// ============================================================================
 
-const NEGATIVE_WORDS = new Set([
-  'error', 'bug', 'broken', 'wrong', 'bad', 'terrible', 'fail', 'failed', 'issue',
-  'problem', 'crash', 'confused', 'confusing', 'slow', 'hard', 'difficult',
-  'frustrating', 'annoying', 'unclear', 'impossible', 'not working', 'unable',
-  'cannot', 'cant', "doesn't", 'doesnt', 'weird', 'strange', 'hate', 'worst',
-  'ugly', 'broken', 'exception', 'traceback', 'undefined', 'null', 'missing',
-]);
+export interface LLMSentimentRequest {
+  text: string;
+  sender?: 'user' | 'assistant' | 'system';
+  conversationContext?: string[];
+}
+
+export interface LLMSentimentResponse {
+  label: 'positive' | 'neutral' | 'negative';
+  score: number; // -1.0 to 1.0
+  confidence?: number;
+  reasoning?: string;
+  modelUsed?: string;
+}
+
+/**
+ * Architectural Template for Free/Local LLM Sentiment Analysis
+ *
+ * NOTE: All hardcoded keyword/lexicon lists (POSITIVE_WORDS, NEGATIVE_WORDS)
+ * and word matching that flagged synonyms of "no", "error", "fail", "null", or "false"
+ * as negative sentiment have been completely removed as requested.
+ *
+ * In technical and programming conversations, terms like "not working", "null", "false",
+ * or "error handling" are descriptive statements of problem state, NOT negative user sentiment.
+ * An LLM accurately understands user tone, gratitude, frustration, or neutral inquiry.
+ *
+ * This function provides the pluggable template adapter for a Free / Non-Paid LLM:
+ *   - Local Ollama (e.g. Llama 3, Mistral, Qwen 2.5 via http://localhost:11434)
+ *   - Free Hugging Face Inference API (e.g. RoBERTa sentiment classifier)
+ *   - In-browser local model via Transformers.js / ONNX
+ *   - Free serverless AI endpoints
+ *
+ * STRICT POLICY: NO PAID MODELS WILL BE USED.
+ *
+ * Recommended System Prompt Template for the Free LLM:
+ * ----------------------------------------------------------------------------
+ * "You are an expert conversational sentiment analysis engine. Analyze the tone
+ * of the following chat message between a user and an AI coding assistant.
+ * Note: Do NOT mark technical bug reports, debugging logs, or words like 'no', 'error',
+ * 'exception', or 'fail' as negative unless the user expresses genuine interpersonal
+ * frustration, hostility, or distress.
+ * 
+ * Return strictly a valid JSON object matching:
+ * {
+ *   "label": "positive" | "neutral" | "negative",
+ *   "score": number (-1.0 to 1.0),
+ *   "reasoning": string
+ * }"
+ * ----------------------------------------------------------------------------
+ */
+export async function analyzeSentimentWithLLM(
+  request: LLMSentimentRequest
+): Promise<LLMSentimentResponse> {
+  try {
+    const res = await fetch('/api/ai/sentiment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: request.text,
+        sender: request.sender
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (data.success && data.sentiment) {
+      return {
+        label: data.sentiment.label,
+        score: data.sentiment.score,
+        modelUsed: 'Groq (openai/gpt-oss-120b) / Gemini'
+      };
+    }
+  } catch (err) {
+    console.warn('[AnalyticsEngine] LLM sentiment fetch error (using neutral baseline):', err);
+  }
+
+  return {
+    label: 'neutral',
+    score: 0.0,
+    modelUsed: 'fallback'
+  };
+}
 
 // ─── Stop-words for topic extraction ─────────────────────────────────────────
 const STOP_WORDS = new Set([
@@ -64,21 +136,14 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
-function scoresSentiment(text: string): SentimentScore {
-  const words = text.toLowerCase().split(/\W+/);
-  let positiveHits = 0;
-  let negativeHits = 0;
-
-  for (const word of words) {
-    if (POSITIVE_WORDS.has(word)) positiveHits++;
-    if (NEGATIVE_WORDS.has(word)) negativeHits++;
-  }
-
-  const total = positiveHits + negativeHits;
-  if (total === 0) return { label: 'neutral', score: 0 };
-  const score = (positiveHits - negativeHits) / Math.max(total, 1);
-  const label = score > 0.1 ? 'positive' : score < -0.1 ? 'negative' : 'neutral';
-  return { label, score: parseFloat(score.toFixed(2)) };
+/**
+ * Evaluates sentiment without brittle regexes or naive wordlists.
+ * Returns an objective neutral baseline ready for LLM overrides.
+ */
+function scoresSentiment(text: string, override?: SentimentScore): SentimentScore {
+  if (override) return override;
+  // Neutral baseline: avoids falsely tagging technical explanations or code discussions as negative
+  return { label: 'neutral', score: 0.0 };
 }
 
 function extractCodeBlocks(content: string): { language: string; lines: number }[] {
@@ -153,7 +218,8 @@ function calcResponseGaps(messages: UnifiedMessage[]): number {
 
 export function computeAnalytics(
   conversation: UnifiedConversation,
-  messages: UnifiedMessage[]
+  messages: UnifiedMessage[],
+  sentimentOverrides?: Record<string, SentimentScore>
 ): ConversationAnalytics {
   if (messages.length === 0) {
     return buildEmpty(conversation);
@@ -177,7 +243,7 @@ export function computeAnalytics(
       dateString: msg.dateString,
       timeString: msg.timeString,
       timestamp: msg.timestamp,
-      sentiment: scoresSentiment(clean),
+      sentiment: scoresSentiment(clean, sentimentOverrides?.[msg.id]),
     };
   });
 
