@@ -58,38 +58,50 @@ export async function POST(req: Request) {
   try {
     const rawPayload = await req.json();
 
-    if (!rawPayload || !(rawPayload.chat_messages || rawPayload.messages)) {
+    if (!rawPayload) {
       return NextResponse.json(
-        { success: false, error: 'Invalid payload structure' },
-        {
-          status: 400,
-          headers: { 'Access-Control-Allow-Origin': '*' }
-        }
+        { success: false, error: 'Empty payload received' },
+        { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
       );
     }
 
-    // Use 'browser_extension' source — the bookmarklet fetches from Claude's
-    // internal API which returns the FULL conversation with per-message
-    // created_at timestamps (real ISO strings). The parser will trust those
-    // and NOT apply any synthetic date fallback.
-    const unifiedConv = parseClaudeConversationObject(rawPayload, 'browser_extension');
-
     const cache = readCache();
+    const importedConvs: any[] = [];
 
-    // Deduplicate: remove existing conversation with the same id
-    cache.conversations = cache.conversations.filter((c) => c.id !== unifiedConv.id);
-    cache.conversations.unshift(unifiedConv);
+    // Support both single conversation and batch conversations list
+    const convItems: any[] = Array.isArray(rawPayload)
+      ? rawPayload
+      : Array.isArray(rawPayload.conversations)
+      ? rawPayload.conversations
+      : [rawPayload];
 
-    // Track latest import for polling detection
-    cache.lastImportId = unifiedConv.id;
+    for (const item of convItems) {
+      if (item && (item.chat_messages || item.messages)) {
+        const unifiedConv = parseClaudeConversationObject(item, 'browser_extension');
+        importedConvs.push(unifiedConv);
+        // Deduplicate in cache
+        cache.conversations = cache.conversations.filter((c) => c.id !== unifiedConv.id);
+        cache.conversations.unshift(unifiedConv);
+      }
+    }
 
+    if (importedConvs.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid payload structure: no chat_messages or messages array found' },
+        { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
+
+    // Set last imported conversation
+    cache.lastImportId = importedConvs[0].id;
     writeCache(cache);
 
     return NextResponse.json(
       {
         success: true,
-        conversation: unifiedConv,
-        message: `Successfully bridged ${unifiedConv.messages.length} message(s) with original timestamps`
+        conversation: importedConvs[0],
+        totalImported: importedConvs.length,
+        message: `Successfully bridged ${importedConvs[0].messages.length} message(s) with original Claude database timestamps`
       },
       {
         status: 200,

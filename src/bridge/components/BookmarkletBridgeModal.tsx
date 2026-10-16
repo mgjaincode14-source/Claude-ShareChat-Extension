@@ -1,14 +1,16 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { BOOKMARKLET_HREF } from '../bookmarklet';
+import { BOOKMARKLET_HREF, BOOKMARKLET_RAW_CODE } from '../bookmarklet';
 import { 
   Zap, 
   Bookmark, 
   Check, 
   Copy, 
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Terminal,
+  AlertCircle
 } from 'lucide-react';
 
 interface BookmarkletBridgeModalProps {
@@ -16,7 +18,8 @@ interface BookmarkletBridgeModalProps {
 }
 
 export const BookmarkletBridgeModal: React.FC<BookmarkletBridgeModalProps> = ({ onImportSuccess }) => {
-  const [copied, setCopied] = useState(false);
+  const [copiedBookmark, setCopiedBookmark] = useState(false);
+  const [copiedConsole, setCopiedConsole] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const anchorRef = useRef<HTMLAnchorElement>(null);
@@ -35,12 +38,12 @@ export const BookmarkletBridgeModal: React.FC<BookmarkletBridgeModalProps> = ({ 
       const res = await fetch('/api/bridge-import');
       const data = await res.json();
       if (data.success && data.latestConversations && data.latestConversations.length > 0) {
-        setStatusMessage(`Found ${data.latestConversations.length} bridged conversation(s)! Loading preview...`);
+        setStatusMessage(`Found ${data.latestConversations.length} bridged conversation(s) with authentic Claude timestamps!`);
         if (onImportSuccess) {
           onImportSuccess(data.latestConversations);
         }
       } else {
-        setStatusMessage('No bridged conversation received yet. Open claude.ai and click the bookmark!');
+        setStatusMessage('No bridged conversation received yet. Open claude.ai and run the bridge!');
       }
     } catch (err) {
       setStatusMessage('Error connecting to local bridge API');
@@ -49,10 +52,16 @@ export const BookmarkletBridgeModal: React.FC<BookmarkletBridgeModalProps> = ({ 
     }
   };
 
-  const handleCopyScript = () => {
+  const handleCopyBookmarkUrl = () => {
     navigator.clipboard.writeText(BOOKMARKLET_HREF);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedBookmark(true);
+    setTimeout(() => setCopiedBookmark(false), 2000);
+  };
+
+  const handleCopyConsoleScript = () => {
+    navigator.clipboard.writeText(BOOKMARKLET_RAW_CODE);
+    setCopiedConsole(true);
+    setTimeout(() => setCopiedConsole(false), 2000);
   };
 
   return (
@@ -63,46 +72,56 @@ export const BookmarkletBridgeModal: React.FC<BookmarkletBridgeModalProps> = ({ 
         </div>
         <div>
           <h3 className="font-semibold text-[#141416] text-sm flex items-center space-x-2">
-            <span>Temporary 1-Click Browser Import Bridge</span>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-amber-100 text-amber-900 border border-amber-200 font-mono font-medium">
-              Bypasses Cloudflare 100%
+            <span>Direct Claude API Bridge (Real Timestamps & Tree Traversal)</span>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-medium">
+              API Exact Dates
             </span>
           </h3>
-          <p className="text-xs text-[#716f68]">Import any real Claude chat or shared link in 1 click</p>
+          <p className="text-xs text-[#716f68]">Extracts the complete conversation tree with exact microsecond timestamps from Claude&apos;s database</p>
+        </div>
+      </div>
+
+      {/* Upgrade Notice */}
+      <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl flex items-start space-x-2.5 text-xs text-amber-900">
+        <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+        <div className="space-y-0.5">
+          <p className="font-medium text-amber-950">Important if you previously saved a bookmark:</p>
+          <p className="text-[11px] text-amber-800 leading-relaxed">
+            Please remove any old bookmark from your browser bar and drag the updated button below, or click <strong>Copy Console Script</strong> and paste directly into DevTools (F12) Console on <code className="bg-amber-100/80 px-1 py-0.5 rounded font-mono">claude.ai</code>.
+          </p>
         </div>
       </div>
 
       {/* 3 Step Instructions */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
         <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#e5e2d8] space-y-1">
-          <span className="font-bold text-[#141416]">Step 1: Drag Bookmark</span>
+          <span className="font-bold text-[#141416]">Step 1: Get the Bridge</span>
           <p className="text-[#716f68] text-[11px] leading-relaxed">
-            Drag the button below into your browser's Bookmarks Bar.
+            Drag the button below to your Bookmarks Bar, or copy the Console script.
           </p>
         </div>
 
         <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#e5e2d8] space-y-1">
-          <span className="font-bold text-[#141416]">Step 2: Open Claude</span>
+          <span className="font-bold text-[#141416]">Step 2: Open Claude Chat</span>
           <p className="text-[#716f68] text-[11px] leading-relaxed">
-            Open any chat on <code className="text-[#141416] bg-[#ebe8df] px-1 py-0.5 rounded font-mono">claude.ai</code> or any shared link.
+            Navigate to any conversation on <code className="text-[#141416] bg-[#ebe8df] px-1 py-0.5 rounded font-mono">claude.ai/chat/...</code>.
           </p>
         </div>
 
         <div className="p-3 bg-[#faf9f5] rounded-xl border border-[#e5e2d8] space-y-1">
-          <span className="font-bold text-[#141416]">Step 3: Click Bookmark</span>
+          <span className="font-bold text-[#141416]">Step 3: Run Bridge</span>
           <p className="text-[#716f68] text-[11px] leading-relaxed">
-            Click the bookmark. The chat loads in our tool in 1 second!
+            Click the bookmark (or paste in Console). All messages with authentic dates load instantly!
           </p>
         </div>
       </div>
 
-      {/* Bookmarklet Drag Button (Ref based to bypass React JSX URL Security Blocker) */}
+      {/* Action Buttons */}
       <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
         <a
           ref={anchorRef}
           draggable
           onClick={(e) => {
-            // Prevent accidental click inside app; inform user to drag or click on claude.ai
             e.preventDefault();
             alert('To use this 1-click bridge:\n\n1. Drag this button to your browser Bookmarks Bar.\n2. Open any chat on claude.ai.\n3. Click the bookmark in your Bookmarks Bar!');
           }}
@@ -110,26 +129,36 @@ export const BookmarkletBridgeModal: React.FC<BookmarkletBridgeModalProps> = ({ 
           title="Drag this button to your browser Bookmarks Bar!"
         >
           <Bookmark className="w-3.5 h-3.5 fill-white" />
-          <span>⚡ Drag to Bookmarks Bar: Import to Claude Selective Tool</span>
+          <span>⚡ Drag to Bookmarks Bar: Claude Tree Bridge</span>
         </a>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center flex-wrap gap-2">
           <button
-            onClick={handleCheckBridge}
-            className="px-3.5 py-2 bg-[#faf9f5] hover:bg-[#f3f2ec] border border-[#e5e2d8] text-[#141416] rounded-full text-xs transition-colors flex items-center space-x-1.5 font-medium"
+            onClick={handleCopyConsoleScript}
+            className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-full text-xs transition-colors flex items-center space-x-1.5 font-medium"
+            title="Copy raw JavaScript to paste directly into browser console on claude.ai"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
-            <span>Check Bridged Chat</span>
+            {copiedConsole ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Copied Console Script!</span>
+              </>
+            ) : (
+              <>
+                <Terminal className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Copy Console Script</span>
+              </>
+            )}
           </button>
 
           <button
-            onClick={handleCopyScript}
-            className="px-3.5 py-2 bg-white hover:bg-[#faf9f5] text-[#716f68] hover:text-[#141416] rounded-full border border-[#e5e2d8] text-xs transition-colors flex items-center space-x-1.5"
+            onClick={handleCopyBookmarkUrl}
+            className="px-3 py-2 bg-white hover:bg-[#faf9f5] text-[#716f68] hover:text-[#141416] rounded-full border border-[#e5e2d8] text-xs transition-colors flex items-center space-x-1.5"
           >
-            {copied ? (
+            {copiedBookmark ? (
               <>
                 <Check className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="text-emerald-700 font-medium">Copied</span>
+                <span className="text-emerald-700 font-medium">Copied Bookmark URL</span>
               </>
             ) : (
               <>
@@ -137,6 +166,14 @@ export const BookmarkletBridgeModal: React.FC<BookmarkletBridgeModalProps> = ({ 
                 <span>Copy Bookmark URL</span>
               </>
             )}
+          </button>
+
+          <button
+            onClick={handleCheckBridge}
+            className="px-3 py-2 bg-[#faf9f5] hover:bg-[#f3f2ec] border border-[#e5e2d8] text-[#141416] rounded-full text-xs transition-colors flex items-center space-x-1.5 font-medium"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
+            <span>Check Bridged Chat</span>
           </button>
         </div>
       </div>

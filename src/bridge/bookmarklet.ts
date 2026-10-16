@@ -1,73 +1,97 @@
 /**
- * Self-contained bookmarklet script to be executed on a claude.ai chat tab.
+ * Self-contained bridge script to be executed on a claude.ai chat tab.
  *
- * IMPORTANT: This calls Claude's own internal conversation API directly from the
- * page (same-origin, so the browser sends session cookies automatically). That
- * API returns the FULL message tree with the REAL per-message created_at
- * timestamp for every message, regardless of scroll position or hover state -
- * the same shape as the official data export, which parser.ts handles.
+ * It calls Claude's official internal conversation API directly from the
+ * authenticated tab session. That API returns the complete conversation tree
+ * with the REAL per-message created_at timestamps (microsecond ISO) and
+ * parent_message_uuid links for tree traversal — identical to Claude's
+ * official data export.
  */
 
-export const BOOKMARKLET_HREF = `javascript:${encodeURIComponent(`(async function(){
+export const BOOKMARKLET_RAW_CODE = `(async function() {
   try {
     function getCookie(name) {
-      var m = document.cookie.match('(?:^|; )' + name + '=([^;]*)');
-      return m ? decodeURIComponent(m[1]) : null;
+      var m = document.cookie.match("(?:^|; )" + name + "=([^;]*)");
+      return m ? decodeURIComponent(m[1]).replace(/["\x27]/g, "").trim() : null;
     }
 
-    // 1. Resolve org id (cookie first, fallback to /api/organizations)
-    var orgId = getCookie('lastActiveOrg');
-    if (!orgId) {
-      var orgRes = await fetch('https://claude.ai/api/organizations', { credentials: 'include' });
-      if (!orgRes.ok) throw new Error('Could not resolve organization (are you logged into claude.ai in this tab?)');
+    // 1. Resolve organization UUID (cookie first, fallback to /api/organizations)
+    var orgId = getCookie("lastActiveOrg");
+    if (!orgId || !orgId.match(/^[0-9a-f-]{36}$/i)) {
+      var orgRes = await fetch("https://claude.ai/api/organizations", { credentials: "include" });
+      if (!orgRes.ok) throw new Error("Could not resolve organization. Make sure you are logged in to claude.ai in this tab.");
       var orgs = await orgRes.json();
-      if (!Array.isArray(orgs) || orgs.length === 0) throw new Error('No organizations found for this account');
+      if (!Array.isArray(orgs) || orgs.length === 0) throw new Error("No active organizations found for this account.");
       orgId = orgs[0].uuid;
     }
 
-    // 2. Resolve conversation id from the current URL, e.g. https://claude.ai/chat/<uuid>
-    var convMatch = window.location.pathname.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    if (!convMatch) throw new Error('Open an actual conversation tab (URL should look like claude.ai/chat/<id>) before running this.');
-    var conversationId = convMatch[0];
-
-    // 3. Fetch the FULL conversation with REAL per-message timestamps directly from Claude's API
-    var apiUrl1 = 'https://claude.ai/api/organizations/' + orgId + '/chat_conversations/' + conversationId +
-                  '?tree=True&rendering_mode=messages&render_all_tools=true';
-    var apiUrl2 = 'https://claude.ai/api/organizations/' + orgId + '/chat_conversations/' + conversationId;
-
-    var convRes = await fetch(apiUrl1, { credentials: 'include' });
-    if (!convRes.ok) {
-      convRes = await fetch(apiUrl2, { credentials: 'include' });
+    // 2. Resolve conversation ID from current URL
+    var convMatch = window.location.pathname.match(new RegExp("(?:chat|conversation)/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", "i")) ||
+                    window.location.pathname.match(new RegExp("([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", "i"));
+    if (!convMatch) {
+      throw new Error("Open an actual conversation tab (URL should look like claude.ai/chat/<id>) before running this.");
     }
-    if (!convRes.ok) throw new Error('Claude API request failed (status ' + convRes.status + '). Try refreshing the page and running again.');
-    
+    var conversationId = convMatch[1] || convMatch[0];
+
+    // 3. Fetch the FULL conversation tree directly from Claude API
+    var endpoints = [
+      "https://claude.ai/api/organizations/" + orgId + "/chat_conversations/" + conversationId + "?tree=True&rendering_mode=messages&render_all_tools=true",
+      "https://claude.ai/api/organizations/" + orgId + "/chat_conversations/" + conversationId + "?tree=true",
+      "https://claude.ai/api/organizations/" + orgId + "/chat_conversations/" + conversationId
+    ];
+
+    var convRes = null;
+    for (var i = 0; i < endpoints.length; i++) {
+      try {
+        var r = await fetch(endpoints[i], { credentials: "include" });
+        if (r.ok) { convRes = r; break; }
+      } catch(e) {}
+    }
+
+    if (!convRes || !convRes.ok) {
+      throw new Error("Claude API request failed (status " + (convRes ? convRes.status : "network error") + "). Try refreshing the chat tab.");
+    }
+
     var rawConversation = await convRes.json();
     var msgs = rawConversation.chat_messages || rawConversation.messages || [];
     var msgCount = msgs.length;
 
-    console.log('[Claude Bridge Import] Status:', convRes.status);
-    console.log('[Claude Bridge Import] Top-level keys:', Object.keys(rawConversation));
-    console.log('[Claude Bridge Import] Message count:', msgCount);
-    if (msgCount > 0) {
-      console.log('[Claude Bridge Import] First message:', msgs[0]);
-      console.log('[Claude Bridge Import] Last message:', msgs[msgCount - 1]);
+    if (msgCount === 0) {
+      throw new Error("No messages found in Claude API response — conversation may still be loading or generating.");
     }
 
-    if (msgCount === 0) throw new Error('No messages found in API response - conversation may still be loading.');
+    var firstMsgDate = (msgs[0] && (msgs[0].created_at || msgs[0].createdAt))
+      ? new Date(msgs[0].created_at || msgs[0].createdAt).toLocaleDateString()
+      : "N/A";
+    var lastMsgDate = (msgs[msgCount - 1] && (msgs[msgCount - 1].created_at || msgs[msgCount - 1].createdAt))
+      ? new Date(msgs[msgCount - 1].created_at || msgs[msgCount - 1].createdAt).toLocaleDateString()
+      : "N/A";
 
-    // 4. Send the raw, real conversation payload to the bridge
-    fetch('http://localhost:3000/api/bridge-import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      mode: 'cors',
+    console.log("[Claude Bridge Import] Successfully retrieved " + msgCount + " messages from Claude API.");
+    console.log("[Claude Bridge Import] Real Database Date Range: " + firstMsgDate + " to " + lastMsgDate);
+    console.log("[Claude Bridge Import] Conversation UUID: " + rawConversation.uuid);
+    console.log("[Claude Bridge Import] Current Leaf UUID: " + rawConversation.current_leaf_message_uuid);
+
+    // 4. Send official conversation tree payload to bridge endpoint
+    var postRes = await fetch("http://localhost:3000/api/bridge-import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      mode: "cors",
       body: JSON.stringify(rawConversation)
-    }).then(function(r){ return r.json(); }).then(function(d){
-      alert('⚡ Imported ALL ' + msgCount + ' message(s) with exact original timestamps from Claude!');
-      window.open('http://localhost:3000/phase2', '_blank');
-    }).catch(function(err){
-      alert('Error sending to http://localhost:3000. Make sure npm run dev is running!');
     });
+
+    var postData = await postRes.json();
+    if (!postData.success) {
+      throw new Error(postData.error || "Failed sending data to local bridge");
+    }
+
+    alert("⚡ Imported " + (postData.conversation?.messages?.length || msgCount) + " messages with EXACT original timestamps (" + firstMsgDate + " to " + lastMsgDate + ") via Tree Traversal!");
+    window.open("http://localhost:3000/phase2", "_blank");
+
   } catch(err) {
-    alert('Bridge Error: ' + err.message);
+    alert("Claude Bridge Error: " + err.message);
+    console.error("[Claude Bridge Error]", err);
   }
-})();`)}`;
+})();`;
+
+export const BOOKMARKLET_HREF = `javascript:${encodeURIComponent(BOOKMARKLET_RAW_CODE)}`;

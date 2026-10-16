@@ -55,6 +55,11 @@ function extractTextFromContent(msg: any): string {
         if (typeof block === 'string') return block;
         if (block?.type === 'text' && block?.text) return block.text;
         if (block?.text) return block.text;
+        if (block?.type === 'thinking' && block?.thinking) return `[Thinking: ${block.thinking}]`;
+        if (block?.type === 'tool_use') return `[Tool Use: ${block.name || 'tool'}]`;
+        if (block?.type === 'tool_result') {
+          return typeof block.content === 'string' ? block.content : '[Tool Output]';
+        }
         return '';
       })
       .filter(Boolean);
@@ -92,6 +97,114 @@ function normalizeSender(sender: any): 'user' | 'assistant' | 'system' {
   return 'user';
 }
 
+/**
+ * Traverses a conversation message tree to produce the exact linear dialogue chain.
+ * If currentLeafUuid is provided (or identified from terminal leaf nodes), it traces
+ * backwards from leaf to root using parentMessageId. Any remaining/alternative branch
+ * messages are preserved and appended cleanly.
+ */
+export function orderMessagesByTree(
+  messages: UnifiedMessage[],
+  currentLeafUuid?: string
+): UnifiedMessage[] {
+  if (messages.length <= 1) return messages;
+
+  const msgMap = new Map<string, UnifiedMessage>();
+  const childrenMap = new Map<string, string[]>();
+  const hasParentLinks = messages.some(
+    (m) => m.parentMessageId && m.parentMessageId !== '00000000-0000-0000-0000-000000000000'
+  );
+
+  // If no parent links exist and no leaf uuid is provided, sort chronologically by timestamp
+  if (!hasParentLinks && !currentLeafUuid) {
+    return [...messages].sort((a, b) => {
+      const tA = new Date(a.timestamp).getTime();
+      const tB = new Date(b.timestamp).getTime();
+      if (isNaN(tA) || isNaN(tB)) return 0;
+      return tA - tB;
+    });
+  }
+
+  for (const m of messages) {
+    msgMap.set(m.id, m);
+    if (m.uuid) msgMap.set(m.uuid, m);
+
+    if (m.parentMessageId && m.parentMessageId !== '00000000-0000-0000-0000-000000000000') {
+      const existing = childrenMap.get(m.parentMessageId) || [];
+      existing.push(m.id);
+      childrenMap.set(m.parentMessageId, existing);
+    }
+  }
+
+  // Determine active leaf UUID
+  let activeLeafId: string | null = null;
+  if (currentLeafUuid && msgMap.has(currentLeafUuid)) {
+    activeLeafId = currentLeafUuid;
+  }
+
+  if (!activeLeafId) {
+    // Find all terminal leaf messages (nodes whose id/uuid is never a parent)
+    const allLeafNodes = messages.filter((m) => {
+      const childrenById = childrenMap.get(m.id) || [];
+      const childrenByUuid = m.uuid ? childrenMap.get(m.uuid) || [] : [];
+      return childrenById.length === 0 && childrenByUuid.length === 0;
+    });
+
+    if (allLeafNodes.length > 0) {
+      allLeafNodes.sort((a, b) => {
+        const tA = new Date(a.timestamp).getTime();
+        const tB = new Date(b.timestamp).getTime();
+        return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+      });
+      activeLeafId = allLeafNodes[0].id;
+    }
+  }
+
+  if (!activeLeafId) {
+    return [...messages].sort((a, b) => {
+      const tA = new Date(a.timestamp).getTime();
+      const tB = new Date(b.timestamp).getTime();
+      if (isNaN(tA) || isNaN(tB)) return 0;
+      return tA - tB;
+    });
+  }
+
+  // Trace backwards from activeLeafId up to root
+  const activeChain: UnifiedMessage[] = [];
+  const visited = new Set<string>();
+  let curr: UnifiedMessage | undefined = msgMap.get(activeLeafId);
+
+  while (curr && !visited.has(curr.id)) {
+    visited.add(curr.id);
+    if (curr.uuid) visited.add(curr.uuid);
+    activeChain.unshift(curr);
+
+    if (
+      !curr.parentMessageId ||
+      curr.parentMessageId === '00000000-0000-0000-0000-000000000000' ||
+      curr.parentMessageId === curr.id ||
+      curr.parentMessageId === curr.uuid
+    ) {
+      break;
+    }
+
+    curr = msgMap.get(curr.parentMessageId);
+  }
+
+  // If activeChain is valid, return the clean active conversation thread
+  if (activeChain.length > 0) {
+    return activeChain;
+  }
+
+  // Fallback to chronological sort if tree chain cannot be formed
+  return [...messages].sort((a, b) => {
+    const tA = new Date(a.timestamp).getTime();
+    const tB = new Date(b.timestamp).getTime();
+    if (isNaN(tA) || isNaN(tB)) return 0;
+    return tA - tB;
+  });
+}
+
 export function parseClaudeConversationObject(
   raw: any, 
   source: 'claude_zip' | 'claude_json' | 'browser_extension' | 'raw_paste' | 'claude_share_link' = 'claude_json'
@@ -113,14 +226,26 @@ export function parseClaudeConversationObject(
 
   const messages: UnifiedMessage[] = rawMessages.map((m: any, index: number) => {
     const msgId = m.uuid || m.id || `msg_${id}_${index}`;
-    const sender = normalizeSender(m.sender || m.role);
+    const sender = normalizeSender(m.sender || m.role || m.author);
     if (sender === 'user') userCount++;
     if (sender === 'assistant') assistantCount++;
 
     const textContent = extractTextFromContent(m);
     
     // Check all potential date property names on message object m
-    const rawMsgDate = m.created_at || m.createdAt || m.inserted_at || m.timestamp || m.date || m.time || m.updated_at;
+    const rawMsgDate =
+      m.created_at ||
+      m.createdAt ||
+      m.inserted_at ||
+      m.timestamp ||
+      m.date ||
+      m.time ||
+      m.updated_at ||
+      m.updatedAt ||
+      m.metadata?.created_at ||
+      m.metadata?.timestamp ||
+      m.metadata?.time;
+
     let msgDate = formatDateISO(rawMsgDate);
 
     // Fall back to conversation root dates if individual message lacks a timestamp
@@ -154,36 +279,32 @@ export function parseClaudeConversationObject(
       dateString: msgDate.dateStr,
       timeString: msgDate.timeStr,
       attachments: attachments.length > 0 ? attachments : undefined,
-      parentMessageId: m.parent_message_uuid || m.parentMessageId || null,
+      parentMessageId: m.parent_message_uuid || m.parentMessageId || m.parent_uuid || null,
       model: m.model || raw.model
     };
   });
 
-  // Sort messages chronologically by timestamp if valid
-  messages.sort((a, b) => {
-    const tA = new Date(a.timestamp).getTime();
-    const tB = new Date(b.timestamp).getTime();
-    if (isNaN(tA) || isNaN(tB)) return 0;
-    return tA - tB;
-  });
+  // Reconstruct tree and active conversation chain
+  const rawLeafUuid = raw.current_leaf_message_uuid || raw.currentLeafMessageUuid || raw.leaf_uuid;
+  const orderedMessages = orderMessagesByTree(messages, rawLeafUuid);
 
-  // Calculate exact start date (first message) and end date (last message)
-  const validMessageDates = messages.map((m) => m.dateString).filter(Boolean);
-  const startDate = validMessageDates.length > 0 ? validMessageDates[0] : createdDate.dateStr;
-  const endDate = validMessageDates.length > 0 ? validMessageDates[validMessageDates.length - 1] : updatedDate.dateStr;
+  // Calculate exact start date (earliest message date) and end date (latest message date)
+  const validDatesSorted = [...orderedMessages.map((m) => m.dateString).filter(Boolean)].sort();
+  const startDate = validDatesSorted.length > 0 ? validDatesSorted[0] : createdDate.dateStr;
+  const endDate = validDatesSorted.length > 0 ? validDatesSorted[validDatesSorted.length - 1] : updatedDate.dateStr;
 
   return {
     id,
     uuid: id,
     title,
-    createdAt: createdDate.iso || (messages[0]?.timestamp) || new Date().toISOString(),
-    updatedAt: updatedDate.iso || (messages[messages.length - 1]?.timestamp) || new Date().toISOString(),
+    createdAt: createdDate.iso || (orderedMessages[0]?.timestamp) || new Date().toISOString(),
+    updatedAt: updatedDate.iso || (orderedMessages[orderedMessages.length - 1]?.timestamp) || new Date().toISOString(),
     createdDateString: startDate || createdDate.dateStr,
-    messages,
+    messages: orderedMessages,
     metadata: {
       model: raw.model || 'Claude',
       exportSource: source,
-      totalMessages: messages.length,
+      totalMessages: orderedMessages.length,
       userMessagesCount: userCount,
       assistantMessagesCount: assistantCount,
       hasAttachments,
