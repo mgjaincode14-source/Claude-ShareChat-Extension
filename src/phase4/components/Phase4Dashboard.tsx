@@ -255,10 +255,21 @@ export const Phase4Dashboard: React.FC = () => {
   };
 
   const handleDeleteSnapshot = async (id: string) => {
+    // 1. Delete locally from browser IndexedDB
     await deleteSnapshot(id);
     const updated = snapshots.filter((s) => s.id !== id);
     setSnapshots(updated);
     if (activeSnapshot?.id === id) setActiveSnapshot(null);
+
+    // 2. Delete remotely from Supabase cloud table
+    try {
+      await fetch(`/api/share?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
+      console.log('[Phase4] Snapshot deleted from Supabase:', id);
+    } catch (err) {
+      console.warn('[Phase4] Failed to delete snapshot from server:', err);
+    }
   };
 
   if (isLoading) {

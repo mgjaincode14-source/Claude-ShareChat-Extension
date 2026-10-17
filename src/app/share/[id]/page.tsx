@@ -1,6 +1,10 @@
 import { PublicSnapshotViewer } from '@/phase4/components/PublicSnapshotViewer';
-import { getSnapshotById } from '@/phase4/snapshotStore';
 import { SharedSnapshot } from '@/phase4/types';
+import {
+  getSnapshotFromSupabase,
+  incrementSnapshotViewsInSupabase,
+  isSupabaseConfigured
+} from '@/lib/supabase';
 import fs from 'fs';
 import path from 'path';
 
@@ -27,18 +31,23 @@ export default async function SharePage({ params }: SharePageProps) {
   const resolvedParams = await params;
   const id = resolvedParams.id;
 
-  let snapshot = getSnapshotFromDisk(id);
+  let snapshot: SharedSnapshot | null = null;
 
-  if (!snapshot) {
-    try {
-      if (typeof window !== 'undefined') {
-        snapshot = (await getSnapshotById(id)) || null;
-      }
-    } catch {
-      snapshot = null;
+  // 1. Fetch from Supabase cloud database
+  if (isSupabaseConfigured()) {
+    snapshot = await getSnapshotFromSupabase(id);
+    if (snapshot) {
+      // Increment views count asynchronously
+      incrementSnapshotViewsInSupabase(id);
     }
   }
 
+  // 2. Fallback to local disk cache (useful during local development)
+  if (!snapshot) {
+    snapshot = getSnapshotFromDisk(id);
+  }
+
+  // 3. Not found in Supabase or local cache
   if (!snapshot) {
     return (
       <div className="min-h-screen bg-[#f3f2ec] flex flex-col items-center justify-center p-6 text-center text-[#716f68] font-sans">
@@ -49,8 +58,16 @@ export default async function SharePage({ params }: SharePageProps) {
           <div>
             <h2 className="text-lg font-bold text-[#141416]">Shared Snapshot Not Found</h2>
             <p className="text-xs text-[#716f68] mt-1.5 leading-relaxed">
-              The public share link <code className="text-[#141416] bg-[#ebe8df] px-1.5 py-0.5 rounded font-mono">/share/{id}</code> is invalid, expired, or has been removed.
+              The public share link <code className="text-[#141416] bg-[#ebe8df] px-1.5 py-0.5 rounded font-mono">/share/{id}</code> is invalid, expired, or has been removed by the author.
             </p>
+          </div>
+          <div className="pt-2">
+            <a
+              href="/"
+              className="inline-flex items-center justify-center px-4 py-2 text-xs font-medium text-[#141416] bg-[#ebe8df] hover:bg-[#e0ded4] rounded-xl transition-colors"
+            >
+              Create Your Own Share Link
+            </a>
           </div>
         </div>
       </div>
