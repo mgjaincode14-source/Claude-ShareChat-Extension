@@ -1,7 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { BOOKMARKLET_HREF, BOOKMARKLET_RAW_CODE } from '../bookmarklet';
+import { 
+  BOOKMARKLET_HREF, 
+  BOOKMARKLET_RAW_CODE, 
+  generateBookmarkletHref, 
+  generateBookmarkletCode 
+} from '../bookmarklet';
 import { 
   Zap, 
   Bookmark, 
@@ -22,12 +27,21 @@ export const BookmarkletBridgeModal: React.FC<BookmarkletBridgeModalProps> = ({ 
   const [copiedConsole, setCopiedConsole] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [bookmarkHref, setBookmarkHref] = useState(BOOKMARKLET_HREF);
+  const [consoleCode, setConsoleCode] = useState(BOOKMARKLET_RAW_CODE);
   const anchorRef = useRef<HTMLAnchorElement>(null);
 
   // Set href via direct DOM reference to bypass React's javascript: URL JSX blocker
+  // Dynamically points to the current active origin (production Vercel domain or localhost)
   useEffect(() => {
-    if (anchorRef.current) {
-      anchorRef.current.setAttribute('href', BOOKMARKLET_HREF);
+    if (typeof window !== 'undefined') {
+      const dynamicHref = generateBookmarkletHref(window.location.origin);
+      const dynamicCode = generateBookmarkletCode(window.location.origin);
+      setBookmarkHref(dynamicHref);
+      setConsoleCode(dynamicCode);
+      if (anchorRef.current) {
+        anchorRef.current.setAttribute('href', dynamicHref);
+      }
     }
   }, []);
 
@@ -46,20 +60,20 @@ export const BookmarkletBridgeModal: React.FC<BookmarkletBridgeModalProps> = ({ 
         setStatusMessage('No bridged conversation received yet. Open claude.ai and run the bridge!');
       }
     } catch (err) {
-      setStatusMessage('Error connecting to local bridge API');
+      setStatusMessage('Error connecting to bridge API');
     } finally {
       setIsChecking(false);
     }
   };
 
   const handleCopyBookmarkUrl = () => {
-    navigator.clipboard.writeText(BOOKMARKLET_HREF);
+    navigator.clipboard.writeText(bookmarkHref);
     setCopiedBookmark(true);
     setTimeout(() => setCopiedBookmark(false), 2000);
   };
 
   const handleCopyConsoleScript = () => {
-    navigator.clipboard.writeText(BOOKMARKLET_RAW_CODE);
+    navigator.clipboard.writeText(consoleCode);
     setCopiedConsole(true);
     setTimeout(() => setCopiedConsole(false), 2000);
   };

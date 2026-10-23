@@ -8,7 +8,15 @@
  * official data export.
  */
 
-export const BOOKMARKLET_RAW_CODE = `(async function() {
+export const PRODUCTION_URL = 'https://claudesharechat.vercel.app';
+
+/**
+ * Generate bookmarklet JavaScript code pointing dynamically to the target application origin.
+ */
+export function generateBookmarkletCode(targetOrigin?: string): string {
+  const origin = (targetOrigin || PRODUCTION_URL).replace(/\/$/, '');
+
+  return `(async function() {
   try {
     function getCookie(name) {
       var m = document.cookie.match("(?:^|; )" + name + "=([^;]*)");
@@ -69,11 +77,10 @@ export const BOOKMARKLET_RAW_CODE = `(async function() {
 
     console.log("[Claude Bridge Import] Successfully retrieved " + msgCount + " messages from Claude API.");
     console.log("[Claude Bridge Import] Real Database Date Range: " + firstMsgDate + " to " + lastMsgDate);
-    console.log("[Claude Bridge Import] Conversation UUID: " + rawConversation.uuid);
-    console.log("[Claude Bridge Import] Current Leaf UUID: " + rawConversation.current_leaf_message_uuid);
+    console.log("[Claude Bridge Import] Target App Origin: " + "${origin}");
 
     // 4. Send official conversation tree payload to bridge endpoint
-    var postRes = await fetch("http://localhost:3000/api/bridge-import", {
+    var postRes = await fetch("${origin}/api/bridge-import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       mode: "cors",
@@ -82,16 +89,25 @@ export const BOOKMARKLET_RAW_CODE = `(async function() {
 
     var postData = await postRes.json();
     if (!postData.success) {
-      throw new Error(postData.error || "Failed sending data to local bridge");
+      throw new Error(postData.error || "Failed sending data to bridge");
     }
 
-    alert("⚡ Imported " + (postData.conversation?.messages?.length || msgCount) + " messages with EXACT original timestamps (" + firstMsgDate + " to " + lastMsgDate + ") via Tree Traversal!");
-    window.open("http://localhost:3000/phase2", "_blank");
+    alert("⚡ Imported " + (postData.conversation?.messages?.length || msgCount) + " messages with EXACT original timestamps (" + firstMsgDate + " to " + lastMsgDate + ")!");
+    window.open("${origin}/phase2", "_blank");
 
   } catch(err) {
     alert("Claude Bridge Error: " + err.message);
     console.error("[Claude Bridge Error]", err);
   }
 })();`;
+}
 
-export const BOOKMARKLET_HREF = `javascript:${encodeURIComponent(BOOKMARKLET_RAW_CODE)}`;
+/**
+ * Generate bookmarklet URL for href attribute.
+ */
+export function generateBookmarkletHref(targetOrigin?: string): string {
+  return `javascript:${encodeURIComponent(generateBookmarkletCode(targetOrigin))}`;
+}
+
+export const BOOKMARKLET_RAW_CODE = generateBookmarkletCode(PRODUCTION_URL);
+export const BOOKMARKLET_HREF = generateBookmarkletHref(PRODUCTION_URL);

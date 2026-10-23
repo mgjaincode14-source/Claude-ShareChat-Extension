@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { SharedSnapshot } from '../types';
+import { getShareBaseUrl } from '../snapshotStore';
 import { 
   Globe, 
   Trash2, 
@@ -29,7 +30,7 @@ export const SnapshotManager: React.FC<SnapshotManagerProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleCopyLink = (snapshot: SharedSnapshot) => {
-    const url = `${window.location.origin}/share/${snapshot.metadata?.customSlug || snapshot.shortCode || snapshot.id}`;
+    const url = `${getShareBaseUrl()}/share/${snapshot.metadata?.customSlug || snapshot.shortCode || snapshot.id}`;
     navigator.clipboard.writeText(url);
     setCopiedId(snapshot.id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -59,7 +60,7 @@ export const SnapshotManager: React.FC<SnapshotManagerProps> = ({
 
       <div className="space-y-2.5 max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-stone-300 pr-1">
         {snapshots.map((snap) => {
-          const shareUrl = `${window.location.origin}/share/${snap.metadata?.customSlug || snap.shortCode || snap.id}`;
+          const shareUrl = `${getShareBaseUrl()}/share/${snap.metadata?.customSlug || snap.shortCode || snap.id}`;
 
           return (
             <div

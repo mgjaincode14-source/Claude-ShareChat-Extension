@@ -80,4 +80,29 @@ export function createSnapshotObject(
   };
 }
 
+export const PRODUCTION_APP_URL = 'https://claudesharechat.vercel.app';
+
+/**
+ * Returns the production-grade base URL for shareable links.
+ * Ensures generated share links use the live public domain
+ * (https://claudesharechat.vercel.app) rather than localhost,
+ * making them immediately shareable and professional.
+ */
+export function getShareBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl.replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return PRODUCTION_APP_URL;
+    }
+    return window.location.origin;
+  }
+
+  return PRODUCTION_APP_URL;
+}
+
 export { saveSnapshot, getAllSnapshots, getSnapshotById, deleteSnapshot, incrementSnapshotViews };
+

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { SharedSnapshot } from '../types';
+import { getShareBaseUrl } from '../snapshotStore';
 import { 
   Share2, 
   Link as LinkIcon, 
@@ -48,7 +49,7 @@ export const ShareLinkGenerator: React.FC<ShareLinkGeneratorProps> = ({
       });
 
       if (snap) {
-        const fullUrl = `${window.location.origin}/share/${snap.metadata.customSlug || snap.shortCode || snap.id}`;
+        const fullUrl = `${getShareBaseUrl()}/share/${snap.metadata.customSlug || snap.shortCode || snap.id}`;
         setCreatedUrl(fullUrl);
       }
     } catch (err) {

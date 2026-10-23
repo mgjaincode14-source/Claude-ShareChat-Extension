@@ -77,17 +77,17 @@ export const RedactionControlPanel: React.FC<RedactionControlPanelProps> = ({
               {isScanning ? (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#faf1ec] text-[#cc5a36] border border-[#f0d5cb] flex items-center space-x-1 animate-pulse">
                   <Sparkles className="w-3 h-3 animate-spin" />
-                  <span>AI Scanning...</span>
+                  <span>Scanning...</span>
                 </span>
               ) : hasScanned ? (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center space-x-1">
                   <Zap className="w-3 h-3 text-emerald-600" />
-                  <span>AI Scanned</span>
+                  <span>Patterns Scanned</span>
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#f0eee6] text-[#716f68] border border-[#e5e0d8] flex items-center space-x-1">
                   <Zap className="w-3 h-3 text-[#cc5a36]" />
-                  <span>LLM Guard</span>
+                  <span>Pattern Guard</span>
                 </span>
               )}
               {stats.totalRedacted > 0 && (
@@ -96,7 +96,7 @@ export const RedactionControlPanel: React.FC<RedactionControlPanelProps> = ({
                 </span>
               )}
             </h3>
-            <p className="text-xs text-[#6b6963]">AI detection (Groq/Gemini) & masking for secrets & credentials</p>
+            <p className="text-xs text-[#6b6963]">Client-side pattern engine — no data sent anywhere</p>
           </div>
         </div>
 
@@ -117,7 +117,7 @@ export const RedactionControlPanel: React.FC<RedactionControlPanelProps> = ({
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5 text-[#f5a623]" />
-                  <span>{hasScanned ? '↻ Re-scan Secrets' : '🤖 Scan Secrets with AI'}</span>
+                  <span>{hasScanned ? '↻ Re-scan Secrets' : '🔍 Scan Secrets (Offline)'}</span>
                 </>
               )}
             </button>

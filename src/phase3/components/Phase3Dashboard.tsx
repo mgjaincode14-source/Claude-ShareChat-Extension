@@ -11,7 +11,7 @@ import { SelectionOptions } from '@/phase2/types';
 import { filterMessagesBySelection, getDateBoundaries } from '@/phase2/engine';
 import { SelectionToolbar } from '@/phase2/components/SelectionToolbar';
 import { RedactionOptions, ExportOptions } from '../types';
-import { applyRedactionToConversation, DetectedPIIEntity } from '../redaction';
+import { applyRedactionToConversation, DetectedPIIEntity, scanConversationPII } from '../redaction';
 import { 
   generateMarkdownExport, 
   generateJsonExport, 
@@ -216,43 +216,29 @@ export const Phase3Dashboard: React.FC = () => {
   const currentDetectedEntities = currentConversation ? detectedEntitiesCache[currentConversation.id] || null : null;
   const hasScannedPII = Boolean(currentDetectedEntities && Object.keys(currentDetectedEntities).length > 0);
 
-  // On-demand AI PII scan: evaluates ONLY the currently selected conversation when clicked
-  const handleScanPIIWithAI = async () => {
+  // On-demand client-side PII scan — runs synchronously in the browser,
+  // zero network calls, zero rate limits, 100% private.
+  const handleScanPIIWithAI = () => {
     if (!currentConversation || currentConversation.messages.length === 0) return;
     setIsScanningPII(true);
     try {
-      console.log(`[Phase3Dashboard] On-demand AI PII scan requested for ${currentConversation.messages.length} messages in chat: ${currentConversation.id}`);
-      const payload = currentConversation.messages.map((m) => ({
-        id: m.id,
-        content: m.content
+      console.log(`[Phase3Dashboard] Client-side PII scan for ${currentConversation.messages.length} messages in chat: ${currentConversation.id}`);
+      const results = scanConversationPII(
+        currentConversation.messages.map((m) => ({ id: m.id, content: m.content })),
+        {
+          detectApiKeys: redactionOptions.redactApiKeys,
+          detectEmails: redactionOptions.redactEmails,
+          detectIpAddresses: redactionOptions.redactIpAddresses,
+          detectPhoneNumbers: redactionOptions.redactPhoneNumbers
+        }
+      );
+      setDetectedEntitiesCache((prev) => ({
+        ...prev,
+        [currentConversation.id]: results
       }));
-      const res = await fetch('/api/ai/redact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: payload,
-          options: {
-            detectApiKeys: redactionOptions.redactApiKeys,
-            detectEmails: redactionOptions.redactEmails,
-            detectIpAddresses: redactionOptions.redactIpAddresses,
-            detectPhoneNumbers: redactionOptions.redactPhoneNumbers
-          }
-        })
-      });
-      if (!res.ok) {
-        console.warn(`[Phase3Dashboard] /api/ai/redact returned HTTP ${res.status}`);
-        return;
-      }
-      const data = await res.json();
-      if (data.success && data.results) {
-        setDetectedEntitiesCache((prev) => ({
-          ...prev,
-          [currentConversation.id]: data.results
-        }));
-        console.log('[Phase3Dashboard] ✅ AI PII Entities detected via Groq/Gemini for', Object.keys(data.results).length, 'messages');
-      }
+      console.log('[Phase3Dashboard] ✅ Client-side PII scan complete for', Object.keys(results).length, 'messages with entities');
     } catch (err) {
-      console.warn('[Phase3Dashboard] AI PII scan error:', err);
+      console.warn('[Phase3Dashboard] Client-side PII scan error:', err);
     } finally {
       setIsScanningPII(false);
     }
