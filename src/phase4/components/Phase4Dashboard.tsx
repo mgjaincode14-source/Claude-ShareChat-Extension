@@ -8,8 +8,8 @@ import { getAllConversations, saveConversations, deleteConversation, clearAllCon
 import { ConversationList } from '@/phase1/components/ConversationList';
 import { ImportModal } from '@/phase1/components/ImportModal';
 import { SelectionOptions } from '@/phase2/types';
-import { filterMessagesBySelection, getDateBoundaries } from '@/phase2/engine';
-import { SelectionToolbar } from '@/phase2/components/SelectionToolbar';
+import { filterMessagesBySelection, getDateBoundaries, getSelectionSummary } from '@/phase2/engine';
+import { SelectionSummaryBar } from '@/phase2/components/SelectionSummaryBar';
 import { RedactionOptions } from '@/phase3/types';
 import { applyRedactionToConversation } from '@/phase3/redaction';
 import { RedactionControlPanel } from '@/phase3/components/RedactionControlPanel';
@@ -202,6 +202,10 @@ export const Phase4Dashboard: React.FC = () => {
     ? filterMessagesBySelection(currentConversation, selectionOptions)
     : [];
 
+  const selectionSummary = currentConversation
+    ? getSelectionSummary(currentConversation, selectionOptions)
+    : null;
+
   const { sanitizedConversation, sanitizedMessages, totalStats } = currentConversation
     ? applyRedactionToConversation(currentConversation, baseSelectedMessages, redactionOptions)
     : {
@@ -277,7 +281,7 @@ export const Phase4Dashboard: React.FC = () => {
       <div className="h-screen bg-[#f3f2ec] flex items-center justify-center text-[#716f68]">
         <div className="flex items-center space-x-2">
           <Sparkles className="w-5 h-5 text-[#141416] animate-spin" />
-          <span>Loading Phase 4 Shareable Web Snapshot Engine...</span>
+          <span>Loading Share & Publish...</span>
         </div>
       </div>
     );
@@ -289,11 +293,11 @@ export const Phase4Dashboard: React.FC = () => {
       <UnifiedHeader
         currentPhase={4}
         title="Share Link Generator"
-        subtitle={`${snapshots.length} public snapshots active · Cloud-ready sharing`}
+        subtitle={`${snapshots.length} snapshot${snapshots.length !== 1 ? 's' : ''} published · Secure cloud sharing`}
         rightAction={
           <div className="hidden sm:flex items-center space-x-1.5 px-3 py-1 rounded-full bg-white border border-[#e5e2d8] text-xs text-[#141416] shadow-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-[#141416] animate-keystone-pulse" />
-            <span>Public Web Snapshots</span>
+            <span>Shared Snapshots</span>
           </div>
         }
       />
@@ -314,15 +318,14 @@ export const Phase4Dashboard: React.FC = () => {
         {/* Main Work Area */}
         {currentConversation ? (
           <div className="flex-1 flex flex-col p-4 sm:p-6 space-y-4 overflow-y-auto scrollbar-thin scrollbar-thumb-stone-300 bg-[#f3f2ec]">
-            {/* Phase 2 Filter Toolbar */}
-            <SelectionToolbar
-              conversation={currentConversation}
-              options={selectionOptions}
-              onChangeOptions={setSelectionOptions}
-              onSelectAll={handleSelectAll}
-              onDeselectAll={handleDeselectAll}
-              onInvertSelection={handleInvertSelection}
-            />
+            {/* Selection Summary Bar */}
+            {selectionSummary && (
+              <SelectionSummaryBar
+                options={selectionOptions}
+                summary={selectionSummary}
+                adjustHref="/phase2"
+              />
+            )}
 
             {/* Phase 3 Redaction Panel */}
             <RedactionControlPanel

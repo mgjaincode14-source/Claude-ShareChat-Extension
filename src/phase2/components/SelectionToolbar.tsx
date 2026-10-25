@@ -68,8 +68,8 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             <ListFilter className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="font-claude-serif text-sm font-semibold text-[#1f1e1d] tracking-tight">Message Filter Engine</h2>
-            <p className="text-[11px] text-[#6b6963]">Choose how to filter conversation messages before sharing</p>
+            <h2 className="font-claude-serif text-sm font-semibold text-[#1f1e1d] tracking-tight">Message Selection</h2>
+            <p className="text-[11px] text-[#6b6963]">Select which messages to include in your export</p>
           </div>
         </div>
 

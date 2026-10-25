@@ -117,7 +117,7 @@ export const RedactionControlPanel: React.FC<RedactionControlPanelProps> = ({
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5 text-[#f5a623]" />
-                  <span>{hasScanned ? '↻ Re-scan Secrets' : '🔍 Scan Secrets (Offline)'}</span>
+                  <span>{hasScanned ? '↻ Re-scan Secrets' : '🔍 Scan for Secrets'}</span>
                 </>
               )}
             </button>

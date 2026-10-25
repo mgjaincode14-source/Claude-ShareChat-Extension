@@ -243,7 +243,7 @@ export const Phase2Dashboard: React.FC = () => {
         rightAction={
           <div className="hidden sm:flex items-center space-x-1.5 px-3 py-1 rounded-full bg-[#ffffff] border border-[#e5e2d8] text-xs text-[#716f68] shadow-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span className="text-[#141416] font-medium">Local Timezone Filtering</span>
+            <span className="text-[#141416] font-medium">Timezone-Aware Filtering</span>
           </div>
         }
       />

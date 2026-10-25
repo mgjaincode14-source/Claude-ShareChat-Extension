@@ -119,7 +119,7 @@ export const UnifiedHeader: React.FC<UnifiedHeaderProps> = ({
           {/* Sync Status Badge */}
           <div className="hidden lg:flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-[#f5f4ee] border border-[#e8e5dd] text-[11px] text-[#6b6963]">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-claude-pulse" />
-            <span className="font-medium text-[#1f1e1d]">Local DB</span>
+            <span className="font-medium text-[#1f1e1d]">Private Storage</span>
           </div>
         </div>
       </header>

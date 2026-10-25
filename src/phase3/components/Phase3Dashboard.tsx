@@ -8,8 +8,8 @@ import { getAllConversations, saveConversations, deleteConversation, clearAllCon
 import { ConversationList } from '@/phase1/components/ConversationList';
 import { ImportModal } from '@/phase1/components/ImportModal';
 import { SelectionOptions } from '@/phase2/types';
-import { filterMessagesBySelection, getDateBoundaries } from '@/phase2/engine';
-import { SelectionToolbar } from '@/phase2/components/SelectionToolbar';
+import { filterMessagesBySelection, getDateBoundaries, getSelectionSummary } from '@/phase2/engine';
+import { SelectionSummaryBar } from '@/phase2/components/SelectionSummaryBar';
 import { RedactionOptions, ExportOptions } from '../types';
 import { applyRedactionToConversation, DetectedPIIEntity, scanConversationPII } from '../redaction';
 import { 
@@ -249,6 +249,10 @@ export const Phase3Dashboard: React.FC = () => {
     ? filterMessagesBySelection(currentConversation, selectionOptions)
     : [];
 
+  const selectionSummary = currentConversation
+    ? getSelectionSummary(currentConversation, selectionOptions)
+    : null;
+
   // Apply Phase 3 Redaction with AI-detected entities
   const { sanitizedConversation, sanitizedMessages, totalStats } = currentConversation
     ? applyRedactionToConversation(currentConversation, baseSelectedMessages, redactionOptions, currentDetectedEntities || undefined)
@@ -336,7 +340,7 @@ export const Phase3Dashboard: React.FC = () => {
         rightAction={
           <div className="hidden sm:flex items-center space-x-1.5 px-3 py-1 rounded-full bg-white border border-[#e5e2d8] text-xs text-emerald-800 shadow-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-keystone-pulse" />
-            <span>Zero-Cloud Local Redaction</span>
+            <span>On-Device Redaction</span>
           </div>
         }
       />
@@ -357,15 +361,14 @@ export const Phase3Dashboard: React.FC = () => {
         {/* Main Work Area */}
         {currentConversation ? (
           <div className="flex-1 flex flex-col p-4 sm:p-6 space-y-4 overflow-y-auto scrollbar-thin scrollbar-thumb-stone-300 bg-[#f3f2ec]">
-            {/* Phase 2 Filter Toolbar */}
-            <SelectionToolbar
-              conversation={currentConversation}
-              options={selectionOptions}
-              onChangeOptions={setSelectionOptions}
-              onSelectAll={handleSelectAll}
-              onDeselectAll={handleDeselectAll}
-              onInvertSelection={handleInvertSelection}
-            />
+            {/* Selection Summary Bar */}
+            {selectionSummary && (
+              <SelectionSummaryBar
+                options={selectionOptions}
+                summary={selectionSummary}
+                adjustHref="/phase2"
+              />
+            )}
 
             {/* Phase 3 Redaction Panel */}
             <RedactionControlPanel
