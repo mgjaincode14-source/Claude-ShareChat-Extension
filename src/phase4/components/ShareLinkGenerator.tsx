@@ -1,21 +1,22 @@
 'use client';
 
 import React, { useState } from 'react';
-import { SharedSnapshot } from '../types';
-import { getShareBaseUrl } from '../snapshotStore';
-import { 
-  Share2, 
-  Link as LinkIcon, 
-  Lock, 
-  Copy, 
-  Check, 
-  Code, 
-  ExternalLink, 
+import { SharedSnapshot, ExpirationOption } from '../types';
+import { getShareBaseUrl, resolveExpiresAt } from '../snapshotStore';
+import {
+  Share2,
+  Link as LinkIcon,
+  Lock,
+  Copy,
+  Check,
+  Code,
+  ExternalLink,
   Sparkles,
-  QrCode,
-  Calendar,
-  Layers,
-  ShieldCheck
+  ShieldCheck,
+  Clock,
+  Key,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 
 interface ShareLinkGeneratorProps {
@@ -23,9 +24,17 @@ interface ShareLinkGeneratorProps {
     customSlug?: string;
     watermarkText?: string;
     passcode?: string;
+    expiresAt?: string;
   }) => Promise<SharedSnapshot | null>;
   activeSnapshot: SharedSnapshot | null;
 }
+
+const TTL_OPTIONS: { value: ExpirationOption; label: string; desc: string }[] = [
+  { value: 'never',  label: 'Never',    desc: 'Link stays active until manually deleted' },
+  { value: '24h',   label: '24 Hours', desc: 'Auto-expires tomorrow' },
+  { value: '7d',    label: '7 Days',   desc: 'Auto-expires in one week' },
+  { value: '30d',   label: '30 Days',  desc: 'Auto-expires in one month' }
+];
 
 export const ShareLinkGenerator: React.FC<ShareLinkGeneratorProps> = ({
   onGenerateShareLink,
@@ -34,23 +43,35 @@ export const ShareLinkGenerator: React.FC<ShareLinkGeneratorProps> = ({
   const [customSlug, setCustomSlug] = useState('');
   const [passcode, setPasscode] = useState('');
   const [watermarkText, setWatermarkText] = useState('Shared via Claude Selective Share');
+  const [expiration, setExpiration] = useState<ExpirationOption>('never');
   const [isGenerating, setIsGenerating] = useState(false);
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
+  const [deletionToken, setDeletionToken] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
+  const [showTokenWarning, setShowTokenWarning] = useState(false);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
+    setShowTokenWarning(false);
     try {
+      const expiresAt = resolveExpiresAt(expiration);
       const snap = await onGenerateShareLink({
         customSlug: customSlug.trim() || undefined,
         watermarkText: watermarkText.trim() || undefined,
-        passcode: passcode.trim() || undefined
+        passcode: passcode.trim() || undefined,
+        expiresAt
       });
 
       if (snap) {
         const fullUrl = `${getShareBaseUrl()}/share/${snap.metadata.customSlug || snap.shortCode || snap.id}`;
         setCreatedUrl(fullUrl);
+        // Surface the deletion token so user can save it
+        if (snap.metadata?.deletionToken) {
+          setDeletionToken(snap.metadata.deletionToken);
+          setShowTokenWarning(true);
+        }
       }
     } catch (err) {
       console.error('Error generating share link:', err);
@@ -64,6 +85,14 @@ export const ShareLinkGenerator: React.FC<ShareLinkGeneratorProps> = ({
       navigator.clipboard.writeText(createdUrl);
       setCopiedUrl(true);
       setTimeout(() => setCopiedUrl(false), 2000);
+    }
+  };
+
+  const handleCopyToken = () => {
+    if (deletionToken) {
+      navigator.clipboard.writeText(deletionToken);
+      setCopiedToken(true);
+      setTimeout(() => setCopiedToken(false), 2000);
     }
   };
 
@@ -92,7 +121,6 @@ export const ShareLinkGenerator: React.FC<ShareLinkGeneratorProps> = ({
             <p className="text-xs text-[#6b6963]">Publish immutable, interactive public share links & embeds</p>
           </div>
         </div>
-
         {createdUrl && (
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-[#faf1ec] text-[#b84b29] border border-[#f0d5cb] flex items-center space-x-1 font-mono">
             <Sparkles className="w-3 h-3 text-[#cc5a36]" />
@@ -101,13 +129,13 @@ export const ShareLinkGenerator: React.FC<ShareLinkGeneratorProps> = ({
         )}
       </div>
 
-      {/* Generator Form Inputs */}
+      {/* Row 1: Slug, Passcode, Watermark */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-        {/* Custom Slug Input */}
+        {/* Custom Slug */}
         <div className="space-y-1">
           <label className="text-[#141416] font-medium flex items-center space-x-1">
             <LinkIcon className="w-3.5 h-3.5 text-[#716f68]" />
-            <span>Custom URL Slug (Optional)</span>
+            <span>Custom URL Slug <span className="text-[#9e9b91]">(optional)</span></span>
           </label>
           <input
             type="text"
@@ -118,11 +146,11 @@ export const ShareLinkGenerator: React.FC<ShareLinkGeneratorProps> = ({
           />
         </div>
 
-        {/* Optional Passcode Input */}
+        {/* Passcode */}
         <div className="space-y-1">
           <label className="text-[#141416] font-medium flex items-center space-x-1">
             <Lock className="w-3.5 h-3.5 text-[#716f68]" />
-            <span>PIN Passcode (Optional)</span>
+            <span>PIN Passcode <span className="text-[#9e9b91]">(optional)</span></span>
           </label>
           <input
             type="password"
@@ -131,9 +159,10 @@ export const ShareLinkGenerator: React.FC<ShareLinkGeneratorProps> = ({
             placeholder="e.g. 1234"
             className="w-full bg-[#faf9f5] border border-[#e5e2d8] hover:bg-white text-[#141416] text-xs rounded-full px-4 py-2 focus:outline-none focus:border-[#141416] font-mono transition-colors"
           />
+          <p className="text-[10px] text-[#9e9b91] pl-1">Hashed server-side — plaintext never stored</p>
         </div>
 
-        {/* Branding Watermark */}
+        {/* Watermark */}
         <div className="space-y-1">
           <label className="text-[#141416] font-medium flex items-center space-x-1">
             <ShieldCheck className="w-3.5 h-3.5 text-[#716f68]" />
@@ -149,8 +178,38 @@ export const ShareLinkGenerator: React.FC<ShareLinkGeneratorProps> = ({
         </div>
       </div>
 
-      {/* Generate Action Button */}
-      <div className="pt-1 flex items-center justify-between gap-3">
+      {/* Row 2: TTL Selector */}
+      <div className="space-y-1.5 text-xs">
+        <label className="text-[#141416] font-medium flex items-center space-x-1">
+          <Clock className="w-3.5 h-3.5 text-[#716f68]" />
+          <span>Link Expiration</span>
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {TTL_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setExpiration(opt.value)}
+              title={opt.desc}
+              className={`px-3.5 py-1.5 rounded-full border text-[11px] font-medium transition-all duration-150 active:scale-95 ${
+                expiration === opt.value
+                  ? 'bg-[#1f1e1d] text-white border-[#1f1e1d] shadow-sm'
+                  : 'bg-[#faf9f5] text-[#6b6963] border-[#e5e2d8] hover:border-[#1f1e1d] hover:text-[#1f1e1d]'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {expiration !== 'never' && (
+          <p className="text-[10px] text-[#9e9b91] pl-1">
+            {TTL_OPTIONS.find((o) => o.value === expiration)?.desc}. Access to this link will return 410 Gone after expiry.
+          </p>
+        )}
+      </div>
+
+      {/* Generate Action */}
+      <div className="pt-1 flex items-center justify-between gap-3 flex-wrap">
         <button
           type="button"
           onClick={handleGenerate}
@@ -180,7 +239,6 @@ export const ShareLinkGenerator: React.FC<ShareLinkGeneratorProps> = ({
                 </>
               )}
             </button>
-
             <a
               href={createdUrl}
               target="_blank"
@@ -194,6 +252,50 @@ export const ShareLinkGenerator: React.FC<ShareLinkGeneratorProps> = ({
         )}
       </div>
 
+      {/* ── Deletion Token Warning ── */}
+      {showTokenWarning && deletionToken && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-2.5 animate-claude-fade text-xs">
+          <div className="flex items-start space-x-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-amber-900">Save your deletion token</p>
+              <p className="text-amber-700 mt-0.5 leading-relaxed">
+                This token is the only way to delete this snapshot from another device or browser.
+                Store it somewhere safe — it will not be shown again.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 bg-white border border-amber-200 rounded-xl px-3 py-2">
+            <Key className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+            <code className="font-mono text-[11px] text-amber-900 flex-1 truncate">{deletionToken}</code>
+            <button
+              type="button"
+              onClick={handleCopyToken}
+              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-full text-[10px] font-medium transition-colors flex items-center space-x-1 active:scale-95"
+            >
+              {copiedToken ? (
+                <>
+                  <Check className="w-3 h-3" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3 h-3" />
+                  <span>Copy</span>
+                </>
+              )}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowTokenWarning(false)}
+            className="text-[10px] text-amber-600 hover:underline"
+          >
+            I've saved it — dismiss
+          </button>
+        </div>
+      )}
+
       {/* Active Share Link & Embed Display Box */}
       {createdUrl && (
         <div className="p-4 bg-[#faf9f5] border border-[#e5e2d8] rounded-2xl space-y-3 text-xs animate-keystone-fade">
@@ -202,7 +304,12 @@ export const ShareLinkGenerator: React.FC<ShareLinkGeneratorProps> = ({
               <LinkIcon className="w-3.5 h-3.5" />
               <span>Public Share URL:</span>
             </span>
-            <span className="text-[11px] text-[#716f68] font-mono">{createdUrl}</span>
+            {expiration !== 'never' && (
+              <span className="flex items-center space-x-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-mono">
+                <Clock className="w-3 h-3" />
+                <span>Expires in {TTL_OPTIONS.find((o) => o.value === expiration)?.label}</span>
+              </span>
+            )}
           </div>
 
           <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-[#e5e2d8]">
@@ -232,6 +339,16 @@ export const ShareLinkGenerator: React.FC<ShareLinkGeneratorProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Deletion instructions */}
+          {deletionToken && (
+            <div className="pt-2 border-t border-[#e5e2d8] flex items-center space-x-1.5 text-[10px] text-[#9e9b91]">
+              <Trash2 className="w-3 h-3 text-[#9e9b91]" />
+              <span>
+                To revoke from any device: <code className="font-mono text-[#6b6963]">DELETE /api/share?id=...&token=&lt;your-token&gt;</code>
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

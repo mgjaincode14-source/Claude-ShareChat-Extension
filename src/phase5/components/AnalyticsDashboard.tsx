@@ -14,7 +14,7 @@ import { ActivityHeatmap } from './ActivityHeatmap';
 import { SentimentChart } from './SentimentChart';
 import { CodeStatsPanel } from './CodeStatsPanel';
 import { TokenAnalyticsPanel } from './TokenAnalyticsPanel';
-import { UnifiedHeader } from '@/components/UnifiedHeader';
+// Phase 5 is archived — UnifiedHeader is used only by phases 1-4.
 import {
   BarChart2,
   Sparkles,
@@ -262,22 +262,28 @@ export const AnalyticsDashboard: React.FC = () => {
 
   return (
     <div className="h-screen flex flex-col bg-[#f3f2ec] text-[#141416] font-sans overflow-hidden">
-      {/* Keystone Unified Header */}
-      <UnifiedHeader
-        currentPhase={5}
-        title="Conversation Analytics"
-        subtitle={
-          currentConversation
-            ? `${currentConversation.title} · ${analytics?.totalMessages || 0} messages`
-            : 'Deep insights into your conversation'
-        }
-        rightAction={
-          <div className="hidden sm:flex items-center space-x-1.5 px-3 py-1 rounded-full bg-white border border-[#e5e2d8] text-xs text-[#141416] shadow-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#141416] animate-keystone-pulse" />
-            <span>Real-Time Intelligence</span>
+      {/* Standalone header — Phase 5 is intentionally unlinked from the main nav */}
+      <header className="h-14 border-b border-[#e8e5dd] bg-[#faf9f5]/90 px-4 sm:px-6 flex items-center justify-between backdrop-blur-md select-none z-20 flex-shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <div className="flex items-center space-x-3 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-[#cc5a36] flex items-center justify-center text-white shadow-sm flex-shrink-0">
+            <BarChart2 className="w-4 h-4" />
           </div>
-        }
-      />
+          <div className="min-w-0">
+            <h1 className="font-claude-serif font-semibold text-sm sm:text-base text-[#1f1e1d] leading-tight truncate tracking-tight">
+              Conversation Analytics
+            </h1>
+            <p className="text-[10px] sm:text-[11px] text-[#6b6963] truncate">
+              {currentConversation
+                ? `${currentConversation.title} · ${analytics?.totalMessages || 0} messages`
+                : 'Deep insights into your conversation'}
+            </p>
+          </div>
+        </div>
+        <div className="hidden sm:flex items-center space-x-1.5 px-3 py-1 rounded-full bg-white border border-[#e5e2d8] text-xs text-[#141416] shadow-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#141416] animate-keystone-pulse" />
+          <span>Real-Time Intelligence</span>
+        </div>
+      </header>
 
       {/* ── Main Layout ── */}
       <div className="flex-1 flex overflow-hidden">

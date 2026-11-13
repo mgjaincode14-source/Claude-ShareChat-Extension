@@ -8,9 +8,7 @@ import {
   ListFilter, 
   ShieldCheck, 
   Share2, 
-  BarChart2, 
   Sparkles, 
-  Coins, 
   ArrowRight, 
   CornerDownLeft,
   Command,
@@ -75,24 +73,6 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({ isOpen
       action: () => { router.push('/phase4'); onClose(); },
       badge: 'Phase 4'
     },
-    {
-      id: 'phase5',
-      title: 'Analytics & Token Intelligence',
-      category: 'Navigation',
-      description: 'Explore sentiment trends, code stats, and Claude BPE token costs',
-      icon: <BarChart2 className="w-4 h-4 text-violet-400" />,
-      action: () => { router.push('/phase5'); onClose(); },
-      badge: 'Phase 5'
-    },
-    {
-      id: 'tokens',
-      title: 'Token Reduction Advisor',
-      category: 'Analytics',
-      description: 'Jump to query token optimization and Claude model cost estimator',
-      icon: <Coins className="w-4 h-4 text-amber-400" />,
-      action: () => { router.push('/phase5'); onClose(); },
-      badge: 'Tokens'
-    }
   ];
 
   const filtered = commands.filter((cmd) =>

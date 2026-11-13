@@ -1,11 +1,13 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { SelectionSummary } from '../types';
 import { 
   User, 
   Link2, 
-  Calendar
+  Calendar,
+  ArrowRight
 } from 'lucide-react';
 import { ClaudeIcon } from '@/components/ClaudeIcon';
 
@@ -95,6 +97,14 @@ export const SelectionSummaryPanel: React.FC<SelectionSummaryPanelProps> = ({ su
               </span>
             </div>
           )}
+          {/* Proceed to Phase 3 CTA */}
+          <Link
+            href="/phase3"
+            className="flex items-center space-x-1.5 px-3.5 py-1.5 bg-[#cc5a36] hover:bg-[#b84b29] text-white rounded-full text-xs font-medium shadow-sm transition-all duration-150 active:scale-95 ml-auto"
+          >
+            <span>Proceed to Privacy & Export</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
       </div>
     </div>

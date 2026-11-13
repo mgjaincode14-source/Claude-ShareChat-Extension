@@ -53,7 +53,7 @@ const API_KEY_PATTERNS: { name: string; pattern: RegExp }[] = [
 
   // AWS
   { name: 'AWS Access Key ID',        pattern: /\b(AKIA|AIPA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA|ASIA)[A-Z0-9]{16}\b/g },
-  { name: 'AWS Secret Access Key',    pattern: /\b[A-Za-z0-9\/+]{40}\b(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])/g },
+  { name: 'AWS Secret Access Key',    pattern: /\b(?=[A-Za-z0-9\/+]{40}\b)(?=[A-Za-z0-9\/+]*[A-Z])(?=[A-Za-z0-9\/+]*[a-z])(?=[A-Za-z0-9\/+]*[0-9])[A-Za-z0-9\/+]{40}\b/g },
 
   // GitHub
   { name: 'GitHub PAT (Classic)',     pattern: /\bghp_[A-Za-z0-9]{36}\b/g },
@@ -214,6 +214,19 @@ export function scanPIIClientSide(request: PIIScanRequest): PIIScanResponse {
     while ((match = IPV4_PATTERN.exec(text)) !== null) {
       const ip = match[0];
       if (IP_ALLOWLIST.has(ip)) continue;
+
+      // Exclude version strings like v1.2.3.4
+      const charBefore = match.index > 0 ? text[match.index - 1] : '';
+      if (charBefore === 'v' || charBefore === 'V') continue;
+
+      // Exclude report/document outline numbering (e.g. "1.1.1.1 Overview" or "2.1.3.4 Plan")
+      if (/^[0-9]\.[0-9]\.[0-9]\.[0-9]$/.test(ip)) {
+        const afterText = text.slice(match.index + ip.length, match.index + ip.length + 15);
+        if (/^[\s.:)\]\-]/.test(afterText) && !afterText.toLowerCase().includes('port') && !afterText.toLowerCase().includes('ip')) {
+          continue;
+        }
+      }
+
       entities.push({
         type: 'IP_ADDRESS',
         value: ip,

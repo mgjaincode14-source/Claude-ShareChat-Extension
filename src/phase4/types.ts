@@ -12,7 +12,7 @@ export interface SharedSnapshot {
   id: string;
   shortCode: string;
   title: string;
-  createdAt: string; // ISO date of snapshot creation
+  createdAt: string;
   dateRange: {
     start: string;
     end: string;
@@ -28,18 +28,18 @@ export interface SharedSnapshot {
     watermarkText: string;
     customSlug?: string;
     viewsCount: number;
+    /** SHA-256 hash of the creator's passcode — plaintext is never stored */
     passcode?: string;
+    /** True when the snapshot requires passcode verification */
+    passcodeProtected?: boolean;
+    /** ISO date string — snapshot auto-expires after this date */
     expiresAt?: string;
-    /** Date range of the selected/filtered messages (may differ from full conversation span) */
-    filteredDateRange?: {
-      start: string;
-      end: string;
-    };
-    /** Full conversation date span (all messages, unfiltered) */
-    fullConversationDateRange?: {
-      start: string;
-      end: string;
-    };
+    /** Signed deletion token — allows cross-device revocation */
+    deletionToken?: string;
+    /** Date range of the selected/filtered messages */
+    filteredDateRange?: { start: string; end: string };
+    /** Full conversation date span */
+    fullConversationDateRange?: { start: string; end: string };
   };
 }
 
@@ -48,3 +48,6 @@ export interface SnapshotFilterOptions {
   senderFilter: 'all' | 'user' | 'assistant';
   hasCodeOnly: boolean;
 }
+
+/** TTL option presented to creator in the ShareLinkGenerator UI */
+export type ExpirationOption = 'never' | '24h' | '7d' | '30d';

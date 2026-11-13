@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { UnifiedConversation } from '@/phase1/types';
 import { SAMPLE_CLAUDE_CONVERSATIONS } from '@/phase1/sampleData';
 import { getAllConversations, saveConversations, deleteConversation, clearAllConversations } from '@/phase1/db';
+import { syncBridgedImports } from '@/phase1/useBridgeSync';
 import { ConversationList } from '@/phase1/components/ConversationList';
 import { ImportModal } from '@/phase1/components/ImportModal';
 import { SelectionOptions } from '@/phase2/types';
@@ -30,15 +31,18 @@ import {
   Layers,
   ListFilter,
   Share2,
-  BarChart2
+  BarChart2,
+  ArrowRight
 } from 'lucide-react';
 import { readSession, writeSession } from '@/store/workflowSession';
+import { ToastNotification, ToastData } from '@/components/ToastNotification';
 
 export const Phase3Dashboard: React.FC = () => {
   const [conversations, setConversations] = useState<UnifiedConversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const lastProcessedBridgeIdRef = useRef<string | null>(null);
 
   // Phase 2 Selection Options
   const [selectionOptions, setSelectionOptions] = useState<SelectionOptions>({
@@ -74,10 +78,16 @@ export const Phase3Dashboard: React.FC = () => {
     includeSandboxSteps: false
   });
 
+  const checkBridge = useCallback(async (): Promise<string | null> => {
+    const result = await syncBridgedImports(lastProcessedBridgeIdRef);
+    return result ? result.newId : null;
+  }, []);
+
   // Load conversations and restore session state
   useEffect(() => {
     async function loadData() {
       try {
+        const latestBridgedId = await checkBridge();
         let stored = await getAllConversations();
         if (stored.length === 0) {
           await saveConversations(SAMPLE_CLAUDE_CONVERSATIONS);
@@ -85,20 +95,21 @@ export const Phase3Dashboard: React.FC = () => {
         }
         setConversations(stored);
 
-        // Restore from session
+        // Restore from session (priority: fresh bridge import > session store > first conv)
         const session = readSession();
-        const restoredId = session.selectedConvId || stored[0]?.id || null;
+        const restoredId = latestBridgedId || session.selectedConvId || stored[0]?.id || null;
         if (restoredId) {
           setSelectedId(restoredId);
           const conv = stored.find((c) => c.id === restoredId);
           if (conv) {
-            // Restore selection options from session if they have content
-            if (session.selectionOptions?.selectedMessageIds?.length) {
+            // Restore selection options from session if they match this conversation
+            if (!latestBridgedId && session.selectedConvId === restoredId && session.selectionOptions) {
               setSelectionOptions(session.selectionOptions);
             } else {
               const bounds = getDateBoundaries(conv);
               setSelectionOptions((prev) => ({
                 ...prev,
+                mode: 'all',
                 startDate: bounds.minDate,
                 endDate: bounds.maxDate,
                 selectedDate: bounds.maxDate,
@@ -118,7 +129,55 @@ export const Phase3Dashboard: React.FC = () => {
       }
     }
     loadData();
-  }, []);
+
+    const interval = setInterval(async () => {
+      const newId = await checkBridge();
+      if (newId) {
+        const updated = await getAllConversations();
+        setConversations(updated);
+        setSelectedId(newId);
+        const target = updated.find((c) => c.id === newId);
+        if (target) {
+          const bounds = getDateBoundaries(target);
+          setSelectionOptions((prev) => ({
+            ...prev,
+            startDate: bounds.minDate,
+            endDate: bounds.maxDate,
+            selectedDate: bounds.maxDate,
+            selectedMessageIds: target.messages.map((m) => m.id)
+          }));
+        }
+      }
+    }, 3000);
+
+    const handleBridgeMessage = async (event: MessageEvent) => {
+      if (event.data?.type === 'CLAUDE_SHARECHAT_BRIDGE_IMPORT') {
+        const newId = await checkBridge();
+        if (newId) {
+          const updated = await getAllConversations();
+          setConversations(updated);
+          setSelectedId(newId);
+          const target = updated.find((c) => c.id === newId);
+          if (target) {
+            const bounds = getDateBoundaries(target);
+            setSelectionOptions((prev) => ({
+              ...prev,
+              startDate: bounds.minDate,
+              endDate: bounds.maxDate,
+              selectedDate: bounds.maxDate,
+              selectedMessageIds: target.messages.map((m) => m.id)
+            }));
+          }
+        }
+      }
+    };
+    window.addEventListener('message', handleBridgeMessage);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('message', handleBridgeMessage);
+    };
+  }, [checkBridge]);
 
   const currentConversation = conversations.find((c) => c.id === selectedId) || null;
 
@@ -212,19 +271,40 @@ export const Phase3Dashboard: React.FC = () => {
   // Per-conversation AI PII detection cache: convId -> { msgId: DetectedPIIEntity[] }
   const [detectedEntitiesCache, setDetectedEntitiesCache] = useState<Record<string, Record<string, DetectedPIIEntity[]>>>({});
   const [isScanningPII, setIsScanningPII] = useState(false);
+  const [scannedConvIds, setScannedConvIds] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<ToastData | null>(null);
 
   const currentDetectedEntities = currentConversation ? detectedEntitiesCache[currentConversation.id] || null : null;
-  const hasScannedPII = Boolean(currentDetectedEntities && Object.keys(currentDetectedEntities).length > 0);
+  const hasScannedPII = Boolean(currentConversation && scannedConvIds.has(currentConversation.id));
+
+  // Compute selected messages via Phase 2 Engine
+  const baseSelectedMessages = currentConversation
+    ? filterMessagesBySelection(currentConversation, selectionOptions)
+    : [];
+
+  const selectionSummary = currentConversation
+    ? getSelectionSummary(currentConversation, selectionOptions)
+    : null;
 
   // On-demand client-side PII scan — runs synchronously in the browser,
   // zero network calls, zero rate limits, 100% private.
   const handleScanPIIWithAI = () => {
-    if (!currentConversation || currentConversation.messages.length === 0) return;
+    if (!currentConversation) return;
+    if (baseSelectedMessages.length === 0) {
+      setToast({
+        id: String(Date.now()),
+        type: 'warning',
+        title: 'No Messages Selected',
+        message: 'No messages are currently selected in Phase 2. Please select messages before scanning.'
+      });
+      return;
+    }
+
     setIsScanningPII(true);
     try {
-      console.log(`[Phase3Dashboard] Client-side PII scan for ${currentConversation.messages.length} messages in chat: ${currentConversation.id}`);
+      console.log(`[Phase3Dashboard] Client-side PII scan for ${baseSelectedMessages.length} selected messages in chat: ${currentConversation.id}`);
       const results = scanConversationPII(
-        currentConversation.messages.map((m) => ({ id: m.id, content: m.content })),
+        baseSelectedMessages.map((m) => ({ id: m.id, content: m.content })),
         {
           detectApiKeys: redactionOptions.redactApiKeys,
           detectEmails: redactionOptions.redactEmails,
@@ -236,22 +316,45 @@ export const Phase3Dashboard: React.FC = () => {
         ...prev,
         [currentConversation.id]: results
       }));
-      console.log('[Phase3Dashboard] ✅ Client-side PII scan complete for', Object.keys(results).length, 'messages with entities');
+      setScannedConvIds((prev) => new Set(prev).add(currentConversation.id));
+
+      // Calculate the exact redaction stats that will be applied to the active selected messages
+      const { totalStats: scanStats } = applyRedactionToConversation(
+        currentConversation,
+        baseSelectedMessages,
+        redactionOptions,
+        results
+      );
+      const totalFound = scanStats.totalRedacted;
+
+      if (totalFound === 0) {
+        setToast({
+          id: String(Date.now()),
+          type: 'clean',
+          title: 'Scan Complete · Zero Secrets Found',
+          message: 'No API keys, phone numbers, email addresses, or IP addresses were detected in this chat. No redactions needed!'
+        });
+      } else {
+        setToast({
+          id: String(Date.now()),
+          type: 'info',
+          title: 'Scan Complete · Secrets Found',
+          message: `Detected ${totalFound} sensitive item${totalFound === 1 ? '' : 's'} across your messages. Redaction masks have been applied.`
+        });
+      }
+      console.log('[Phase3Dashboard] ✅ Client-side PII scan complete for', Object.keys(results).length, 'messages with entities, total:', totalFound);
     } catch (err) {
       console.warn('[Phase3Dashboard] Client-side PII scan error:', err);
+      setToast({
+        id: String(Date.now()),
+        type: 'warning',
+        title: 'Scan Error',
+        message: 'An error occurred while scanning for secrets. Please try again.'
+      });
     } finally {
       setIsScanningPII(false);
     }
   };
-
-  // Compute selected messages via Phase 2 Engine
-  const baseSelectedMessages = currentConversation
-    ? filterMessagesBySelection(currentConversation, selectionOptions)
-    : [];
-
-  const selectionSummary = currentConversation
-    ? getSelectionSummary(currentConversation, selectionOptions)
-    : null;
 
   // Apply Phase 3 Redaction with AI-detected entities
   const { sanitizedConversation, sanitizedMessages, totalStats } = currentConversation
@@ -309,6 +412,12 @@ export const Phase3Dashboard: React.FC = () => {
   const handleCopy = () => {
     if (exportedContent) {
       navigator.clipboard.writeText(exportedContent);
+      setToast({
+        id: String(Date.now()),
+        type: 'success',
+        title: 'Copied to Clipboard',
+        message: 'Export content copied to your clipboard.'
+      });
     }
   };
 
@@ -395,6 +504,17 @@ export const Phase3Dashboard: React.FC = () => {
               format={exportOptions.format}
               title={currentConversation.title}
             />
+
+            {/* Navigation to Phase 4 Share */}
+            <div className="flex justify-end pt-2 pb-6">
+              <Link
+                href="/phase4"
+                className="flex items-center space-x-1.5 px-5 py-2.5 bg-[#cc5a36] hover:bg-[#b84b29] text-white rounded-full text-xs font-medium shadow-sm transition-all duration-150 active:scale-95"
+              >
+                <span>Proceed to Share Link (Phase 4)</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-[#716f68] space-y-4">
@@ -423,6 +543,9 @@ export const Phase3Dashboard: React.FC = () => {
           setIsImportOpen(false);
         }}
       />
+
+      {/* Floating Toaster for Scans and Alerts */}
+      <ToastNotification toast={toast} onClose={() => setToast(null)} />
     </div>
   );
 };

@@ -1,5 +1,3 @@
-'use client';
-
 import React from 'react';
 import { UnifiedConversation } from '@/phase1/types';
 import { SelectionOptions, SelectionMode } from '../types';
@@ -13,7 +11,9 @@ import {
   RotateCcw, 
   CheckCircle2, 
   XSquare,
-  ListFilter
+  ListFilter,
+  User,
+  Cpu
 } from 'lucide-react';
 
 interface SelectionToolbarProps {
@@ -58,6 +58,30 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
 
     onChangeOptions(nextOptions);
   };
+
+  // ── Sender Quick-Filter handlers ────────────────────────────────────────────
+  const handleSelectClaudeOnly = () => {
+    onChangeOptions({
+      ...options,
+      mode: 'individual',
+      selectedMessageIds: conversation.messages
+        .filter((m) => m.sender === 'assistant')
+        .map((m) => m.id)
+    });
+  };
+
+  const handleSelectUserOnly = () => {
+    onChangeOptions({
+      ...options,
+      mode: 'individual',
+      selectedMessageIds: conversation.messages
+        .filter((m) => m.sender === 'user')
+        .map((m) => m.id)
+    });
+  };
+
+  const claudeCount = conversation.messages.filter((m) => m.sender === 'assistant').length;
+  const userCount = conversation.messages.filter((m) => m.sender === 'user').length;
 
   return (
     <div className="bg-[#faf9f5]/90 border-b border-[#e8e5dd] p-4 space-y-4 backdrop-blur-md shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
@@ -206,7 +230,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
 
         {/* Individual Selection Quick Actions */}
         {options.mode === 'individual' && (
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={onSelectAll}
               className="px-3 py-1.5 bg-[#ffffff] hover:bg-[#f3f2ec] text-[#141416] border border-[#e5e2d8] rounded-full text-xs font-medium transition-all duration-200 flex items-center space-x-1.5 active:scale-95 shadow-sm"
@@ -227,6 +251,30 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             >
               <RotateCcw className="w-3.5 h-3.5 text-[#141416]" />
               <span>Invert</span>
+            </button>
+
+            {/* Separator */}
+            <span className="text-[#dcd9ce] select-none px-0.5">|</span>
+
+            {/* Sender quick-filters */}
+            <button
+              onClick={handleSelectClaudeOnly}
+              title={`Select only Claude's ${claudeCount} responses`}
+              className="px-3 py-1.5 bg-[#faf1ec] hover:bg-[#f6e5dc] text-[#b84b29] border border-[#f0d5cb] rounded-full text-xs font-medium transition-all duration-200 flex items-center space-x-1.5 active:scale-95 shadow-sm"
+            >
+              <Cpu className="w-3.5 h-3.5 text-[#cc5a36]" />
+              <span>Claude Only</span>
+              <span className="font-mono text-[10px] text-[#cc5a36] bg-[#fbe7de] px-1.5 py-0.5 rounded-full border border-[#f0d5cb]">{claudeCount}</span>
+            </button>
+
+            <button
+              onClick={handleSelectUserOnly}
+              title={`Select only the user's ${userCount} messages`}
+              className="px-3 py-1.5 bg-white hover:bg-[#f3f2ec] text-[#1f1e1d] border border-[#e5e2d8] rounded-full text-xs font-medium transition-all duration-200 flex items-center space-x-1.5 active:scale-95 shadow-sm"
+            >
+              <User className="w-3.5 h-3.5 text-[#6b6963]" />
+              <span>User Only</span>
+              <span className="font-mono text-[10px] text-[#6b6963] bg-[#f0eee6] px-1.5 py-0.5 rounded-full border border-[#e5e0d8]">{userCount}</span>
             </button>
           </div>
         )}

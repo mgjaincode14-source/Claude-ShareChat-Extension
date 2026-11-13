@@ -1,18 +1,19 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { UnifiedConversation } from '@/phase1/types';
 import { SAMPLE_CLAUDE_CONVERSATIONS } from '@/phase1/sampleData';
 import { getAllConversations, saveConversations, deleteConversation, clearAllConversations } from '@/phase1/db';
+import { syncBridgedImports } from '@/phase1/useBridgeSync';
 import { ConversationList } from '@/phase1/components/ConversationList';
 import { ImportModal } from '@/phase1/components/ImportModal';
 import { SelectionOptions } from '@/phase2/types';
 import { filterMessagesBySelection, getDateBoundaries, getSelectionSummary } from '@/phase2/engine';
 import { SelectionSummaryBar } from '@/phase2/components/SelectionSummaryBar';
 import { RedactionOptions } from '@/phase3/types';
-import { applyRedactionToConversation } from '@/phase3/redaction';
-import { RedactionControlPanel } from '@/phase3/components/RedactionControlPanel';
+import { applyRedactionToConversation, scanConversationPII, DetectedPIIEntity } from '@/phase3/redaction';
+import { RedactionSummaryBar } from '@/phase3/components/RedactionSummaryBar';
 import { SharedSnapshot } from '../types';
 import { createSnapshotObject } from '../snapshotStore';
 import {
@@ -41,6 +42,7 @@ export const Phase4Dashboard: React.FC = () => {
   const [activeSnapshot, setActiveSnapshot] = useState<SharedSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const lastProcessedBridgeIdRef = useRef<string | null>(null);
 
   // Phase 2 Selection Options
   const [selectionOptions, setSelectionOptions] = useState<SelectionOptions>({
@@ -67,10 +69,21 @@ export const Phase4Dashboard: React.FC = () => {
     assistantAlias: 'AI Assistant'
   });
 
+  // PII entity cache — auto-populated via scanConversationPII (synchronous, client-side, zero network calls).
+  // This mirrors what Phase 3 does when the user clicks "Scan for Secrets", ensuring that the
+  // redaction stats visible in Phase 4 and baked into the snapshot are accurate.
+  const [piiEntitiesCache, setPiiEntitiesCache] = useState<Record<string, Record<string, DetectedPIIEntity[]>>>({});
+
+  const checkBridge = useCallback(async (): Promise<string | null> => {
+    const result = await syncBridgedImports(lastProcessedBridgeIdRef);
+    return result ? result.newId : null;
+  }, []);
+
   // Load conversations & existing snapshots from IndexedDB
   useEffect(() => {
     async function loadData() {
       try {
+        const latestBridgedId = await checkBridge();
         let storedConvs = await getAllConversations();
         if (storedConvs.length === 0) {
           await saveConversations(SAMPLE_CLAUDE_CONVERSATIONS);
@@ -78,19 +91,21 @@ export const Phase4Dashboard: React.FC = () => {
         }
         setConversations(storedConvs);
 
-        // Restore session state
+        // Restore session state (priority: fresh bridge import > session store > first conv)
         const session = readSession();
-        const restoredId = session.selectedConvId || (storedConvs[0]?.id ?? null);
+        const restoredId = latestBridgedId || session.selectedConvId || (storedConvs[0]?.id ?? null);
         if (restoredId) {
           setSelectedId(restoredId);
           const conv = storedConvs.find((c) => c.id === restoredId);
           if (conv) {
-            if (session.selectionOptions?.selectedMessageIds?.length) {
+            // Restore selection options from session if they match this conversation
+            if (!latestBridgedId && session.selectedConvId === restoredId && session.selectionOptions) {
               setSelectionOptions(session.selectionOptions);
             } else {
               const bounds = getDateBoundaries(conv);
               setSelectionOptions((prev) => ({
                 ...prev,
+                mode: 'all',
                 startDate: bounds.minDate,
                 endDate: bounds.maxDate,
                 selectedDate: bounds.maxDate,
@@ -112,7 +127,55 @@ export const Phase4Dashboard: React.FC = () => {
       }
     }
     loadData();
-  }, []);
+
+    const interval = setInterval(async () => {
+      const newId = await checkBridge();
+      if (newId) {
+        const updated = await getAllConversations();
+        setConversations(updated);
+        setSelectedId(newId);
+        const target = updated.find((c) => c.id === newId);
+        if (target) {
+          const bounds = getDateBoundaries(target);
+          setSelectionOptions((prev) => ({
+            ...prev,
+            startDate: bounds.minDate,
+            endDate: bounds.maxDate,
+            selectedDate: bounds.maxDate,
+            selectedMessageIds: target.messages.map((m) => m.id)
+          }));
+        }
+      }
+    }, 3000);
+
+    const handleBridgeMessage = async (event: MessageEvent) => {
+      if (event.data?.type === 'CLAUDE_SHARECHAT_BRIDGE_IMPORT') {
+        const newId = await checkBridge();
+        if (newId) {
+          const updated = await getAllConversations();
+          setConversations(updated);
+          setSelectedId(newId);
+          const target = updated.find((c) => c.id === newId);
+          if (target) {
+            const bounds = getDateBoundaries(target);
+            setSelectionOptions((prev) => ({
+              ...prev,
+              startDate: bounds.minDate,
+              endDate: bounds.maxDate,
+              selectedDate: bounds.maxDate,
+              selectedMessageIds: target.messages.map((m) => m.id)
+            }));
+          }
+        }
+      }
+    };
+    window.addEventListener('message', handleBridgeMessage);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('message', handleBridgeMessage);
+    };
+  }, [checkBridge]);
 
   const currentConversation = conversations.find((c) => c.id === selectedId) || null;
 
@@ -206,8 +269,31 @@ export const Phase4Dashboard: React.FC = () => {
     ? getSelectionSummary(currentConversation, selectionOptions)
     : null;
 
+  // Auto-run PII scan whenever the selected messages change (synchronous, 100% client-side, <5ms).
+  // This ensures Phase 4 uses the same redaction entities as Phase 3's "Scan for Secrets" button,
+  // so the redaction stats in the snapshot are correct and not shown as "zero secrets detected".
+  const currentConvId = currentConversation?.id ?? null;
+  const currentPiiEntities = currentConvId ? (piiEntitiesCache[currentConvId] ?? null) : null;
+
+  useEffect(() => {
+    if (!currentConversation || baseSelectedMessages.length === 0) return;
+    const entities = scanConversationPII(
+      baseSelectedMessages.map((m) => ({ id: m.id, content: m.content })),
+      {
+        detectApiKeys: redactionOptions.redactApiKeys,
+        detectEmails: redactionOptions.redactEmails,
+        detectIpAddresses: redactionOptions.redactIpAddresses,
+        detectPhoneNumbers: redactionOptions.redactPhoneNumbers
+      }
+    );
+    setPiiEntitiesCache((prev) => ({ ...prev, [currentConversation.id]: entities }));
+  // Intentionally only re-runs when conversation or redaction settings change.
+  // baseSelectedMessages changes every render; use the conversation id + options as the stable dep.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentConvId, redactionOptions, selectionOptions]);
+
   const { sanitizedConversation, sanitizedMessages, totalStats } = currentConversation
-    ? applyRedactionToConversation(currentConversation, baseSelectedMessages, redactionOptions)
+    ? applyRedactionToConversation(currentConversation, baseSelectedMessages, redactionOptions, currentPiiEntities ?? undefined)
     : {
         sanitizedConversation: null,
         sanitizedMessages: [],
@@ -226,6 +312,7 @@ export const Phase4Dashboard: React.FC = () => {
     customSlug?: string;
     watermarkText?: string;
     passcode?: string;
+    expiresAt?: string;
   }): Promise<SharedSnapshot | null> => {
     if (!sanitizedConversation || !sanitizedMessages) return null;
 
@@ -260,16 +347,21 @@ export const Phase4Dashboard: React.FC = () => {
 
   const handleDeleteSnapshot = async (id: string) => {
     // 1. Delete locally from browser IndexedDB
+    const snap = snapshots.find((s) => s.id === id);
     await deleteSnapshot(id);
     const updated = snapshots.filter((s) => s.id !== id);
     setSnapshots(updated);
     if (activeSnapshot?.id === id) setActiveSnapshot(null);
 
     // 2. Delete remotely from Supabase cloud table
+    // If the snapshot has a deletionToken, include it so the server
+    // can verify cross-device revocation requests.
     try {
-      await fetch(`/api/share?id=${encodeURIComponent(id)}`, {
-        method: 'DELETE'
-      });
+      const token = snap?.metadata?.deletionToken;
+      const url = token
+        ? `/api/share?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`
+        : `/api/share?id=${encodeURIComponent(id)}`;
+      await fetch(url, { method: 'DELETE' });
       console.log('[Phase4] Snapshot deleted from Supabase:', id);
     } catch (err) {
       console.warn('[Phase4] Failed to delete snapshot from server:', err);
@@ -327,11 +419,11 @@ export const Phase4Dashboard: React.FC = () => {
               />
             )}
 
-            {/* Phase 3 Redaction Panel */}
-            <RedactionControlPanel
+            {/* Phase 3 Redaction Summary */}
+            <RedactionSummaryBar
               options={redactionOptions}
-              onChangeOptions={setRedactionOptions}
               stats={totalStats}
+              adjustHref="/phase3"
             />
 
             {/* Phase 4 Share Link Generator */}

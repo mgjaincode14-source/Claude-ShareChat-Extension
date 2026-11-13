@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claude ShareChat</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-logo">
+        <img src="../icons/icon48.png" alt="Claude ShareChat" class="logo-img" />
+        <div class="header-text">
+          <span class="header-title">Claude ShareChat</span>
+          <span class="header-version">v1.0.0</span>
+        </div>
+      </div>
+      <div class="env-switcher" title="Select target destination">
+        <button id="env-prod-btn" class="env-pill active" type="button">Vercel</button>
+        <button id="env-local-btn" class="env-pill" type="button">Local:3000</button>
+      </div>
+    </header>
+
+    <!-- State: Not on Claude -->
+    <div id="state-not-claude" class="state hidden">
+      <div class="state-icon">🌐</div>
+      <p class="state-title">Open Claude first</p>
+      <p class="state-desc">Navigate to <strong>claude.ai</strong> and open a conversation to import it.</p>
+      <a id="open-claude-btn" href="https://claude.ai" target="_blank" class="btn btn-secondary">
+        Open Claude.ai ↗
+      </a>
+    </div>
+
+    <!-- State: On Claude but not on a conversation -->
+    <div id="state-not-conversation" class="state hidden">
+      <div class="state-icon">💬</div>
+      <p class="state-title">Open a conversation</p>
+      <p class="state-desc">You're on Claude. Now open any conversation you want to import.</p>
+    </div>
+
+    <!-- State: On a conversation — ready to import -->
+    <div id="state-ready" class="state hidden">
+      <div class="conversation-card">
+        <div class="conv-badge">Ready to import</div>
+        <p class="conv-title" id="conv-title">Loading...</p>
+        <p class="conv-meta" id="conv-meta">Fetching details...</p>
+      </div>
+
+      <button id="import-btn" class="btn btn-primary">
+        <span id="import-btn-icon">⚡</span>
+        <span id="import-btn-label">Import & Open ShareChat</span>
+      </button>
+
+      <div id="import-progress" class="progress hidden">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <p class="progress-label" id="progress-label">Connecting to Claude API...</p>
+      </div>
+    </div>
+
+    <!-- State: Import Success -->
+    <div id="state-success" class="state hidden">
+      <div class="success-icon">✅</div>
+      <p class="state-title">Import successful!</p>
+      <p class="state-desc" id="success-desc">Conversation imported with original timestamps.</p>
+      <div class="success-actions">
+        <button id="open-phase2-btn" class="btn btn-primary">Filter Messages →</button>
+        <button id="open-phase3-btn" class="btn btn-secondary">Export & Redact →</button>
+        <button id="open-phase4-btn" class="btn btn-secondary">Share Link →</button>
+      </div>
+    </div>
+
+    <!-- State: Error -->
+    <div id="state-error" class="state hidden">
+      <div class="state-icon error-icon-em">⚠️</div>
+      <p class="state-title">Something went wrong</p>
+      <p class="state-desc" id="error-msg">Unknown error occurred.</p>
+      <button id="retry-btn" class="btn btn-secondary">Try Again</button>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <button id="open-app-btn" class="footer-link">Open ShareChat ↗</button>
+      <span class="footer-sep">·</span>
+      <a href="https://claudesharechat.vercel.app" target="_blank" class="footer-link">claudesharechat.vercel.app</a>
+    </footer>
+
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

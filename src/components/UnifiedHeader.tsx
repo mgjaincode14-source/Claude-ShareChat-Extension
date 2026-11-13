@@ -8,7 +8,6 @@ import {
   ListFilter, 
   ShieldCheck, 
   Share2, 
-  BarChart2, 
   Sparkles, 
   Command, 
   Database,
@@ -18,7 +17,7 @@ import { CommandPaletteModal } from './CommandPaletteModal';
 import { ClaudeIcon } from './ClaudeIcon';
 
 interface UnifiedHeaderProps {
-  currentPhase: 1 | 2 | 3 | 4 | 5;
+  currentPhase: 1 | 2 | 3 | 4;
   title?: string;
   subtitle?: string;
   rightAction?: React.ReactNode;
@@ -50,7 +49,6 @@ export const UnifiedHeader: React.FC<UnifiedHeaderProps> = ({
     { phase: 2, href: '/phase2', label: 'Filter', icon: <ListFilter className="w-3.5 h-3.5" /> },
     { phase: 3, href: '/phase3', label: 'Privacy', icon: <ShieldCheck className="w-3.5 h-3.5" /> },
     { phase: 4, href: '/phase4', label: 'Share', icon: <Share2 className="w-3.5 h-3.5" /> },
-    { phase: 5, href: '/phase5', label: 'Analytics', icon: <BarChart2 className="w-3.5 h-3.5" /> },
   ];
 
   const phaseConfig = {
@@ -58,7 +56,6 @@ export const UnifiedHeader: React.FC<UnifiedHeaderProps> = ({
     2: { name: 'Message Filter', icon: <ListFilter className="w-4 h-4" /> },
     3: { name: 'Privacy & Export', icon: <ShieldCheck className="w-4 h-4" /> },
     4: { name: 'Share Link Generator', icon: <Share2 className="w-4 h-4" /> },
-    5: { name: 'Conversation Analytics', icon: <BarChart2 className="w-4 h-4" /> }
   };
 
   const currentConfig = phaseConfig[currentPhase];

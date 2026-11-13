@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import { readSession, writeSession } from '@/store/workflowSession';
 
+import { syncBridgedImports } from '@/phase1/useBridgeSync';
+
 export const Phase2Dashboard: React.FC = () => {
   const [conversations, setConversations] = useState<UnifiedConversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -44,24 +46,8 @@ export const Phase2Dashboard: React.FC = () => {
   const lastProcessedBridgeIdRef = useRef<string | null>(null);
 
   const checkForBridgedImports = useCallback(async (): Promise<string | null> => {
-    try {
-      const res = await fetch('/api/bridge-import');
-      const bridgeData = await res.json();
-      if (
-        bridgeData.success &&
-        bridgeData.lastImportId &&
-        bridgeData.lastImportId !== lastProcessedBridgeIdRef.current &&
-        bridgeData.latestConversations &&
-        bridgeData.latestConversations.length > 0
-      ) {
-        await saveConversations(bridgeData.latestConversations);
-        lastProcessedBridgeIdRef.current = bridgeData.lastImportId;
-        return bridgeData.lastImportId;
-      }
-    } catch (err) {
-      console.warn('Bridge sync error:', err);
-    }
-    return null;
+    const result = await syncBridgedImports(lastProcessedBridgeIdRef);
+    return result ? result.newId : null;
   }, []);
 
   const loadData = useCallback(async () => {
@@ -81,20 +67,23 @@ export const Phase2Dashboard: React.FC = () => {
       setSelectedId(restoredId);
       const target = data.find((c) => c.id === restoredId);
       if (target) {
-        const { minDate, maxDate } = getDateBoundaries(target);
-        // If session has meaningful filter options, restore them; otherwise use defaults
-        const restoredOpts = session.selectionOptions?.selectedMessageIds?.length
-          ? session.selectionOptions
-          : {
-              mode: 'all' as const,
-              startDate: minDate,
-              endDate: maxDate,
-              selectedDate: minDate,
-              selectedMessageIds: target.messages.map((m) => m.id),
-              includePrecedingContext: true,
-              contextDepth: 1,
-            };
-        setSelectionOptions(restoredOpts);
+        // Restore session selection options if they belong to this conversation
+        if (!latestBridgedId && session.selectedConvId === restoredId && session.selectionOptions) {
+          setSelectionOptions(session.selectionOptions);
+        } else {
+          const { minDate, maxDate } = getDateBoundaries(target);
+          const defaultOpts: SelectionOptions = {
+            mode: 'all' as const,
+            startDate: minDate,
+            endDate: maxDate,
+            selectedDate: minDate,
+            selectedMessageIds: target.messages.map((m) => m.id),
+            includePrecedingContext: true,
+            contextDepth: 1,
+          };
+          setSelectionOptions(defaultOpts);
+          writeSession({ selectedConvId: restoredId, selectionOptions: defaultOpts });
+        }
       }
     }
   }, [checkForBridgedImports]);
@@ -120,7 +109,33 @@ export const Phase2Dashboard: React.FC = () => {
         }
       }
     }, 3000);
-    return () => clearInterval(interval);
+    const handleBridgeMessage = async (event: MessageEvent) => {
+      if (event.data?.type === 'CLAUDE_SHARECHAT_BRIDGE_IMPORT') {
+        const newId = await checkForBridgedImports();
+        if (newId) {
+          const updated = await getAllConversations();
+          setConversations(updated);
+          setSelectedId(newId);
+          const target = updated.find((c) => c.id === newId);
+          if (target) {
+            const { minDate, maxDate } = getDateBoundaries(target);
+            setSelectionOptions((prev) => ({
+              ...prev,
+              startDate: minDate,
+              endDate: maxDate,
+              selectedDate: minDate,
+              selectedMessageIds: target.messages.map((m) => m.id)
+            }));
+          }
+        }
+      }
+    };
+    window.addEventListener('message', handleBridgeMessage);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('message', handleBridgeMessage);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -212,10 +227,12 @@ export const Phase2Dashboard: React.FC = () => {
 
   const [isImportOpen, setIsImportOpen] = useState(false);
 
-  // Write selectionOptions to session whenever they change
+  // Write selectionOptions & selectedConvId to session whenever they change
   useEffect(() => {
-    writeSession({ selectionOptions });
-  }, [selectionOptions]);
+    if (selectedId) {
+      writeSession({ selectedConvId: selectedId, selectionOptions });
+    }
+  }, [selectedId, selectionOptions]);
 
   const handleImportSuccess = async (imported: UnifiedConversation[]) => {
     await saveConversations(imported);

@@ -3,42 +3,74 @@ import { parseClaudeConversationObject } from '@/phase1/parser';
 import fs from 'fs';
 import path from 'path';
 
-const CACHE_FILE_PATH = path.join(process.cwd(), 'src', 'phase1', 'bridged_cache.json');
-
+// Dual-tier cache: in-memory (always accessible within runtime) + filesystem (/tmp on Vercel, local file in dev)
 interface BridgeCache {
   lastImportId: string | null;
   conversations: any[];
 }
 
-function readCache(): BridgeCache {
-  try {
-    if (fs.existsSync(CACHE_FILE_PATH)) {
-      const fileData = fs.readFileSync(CACHE_FILE_PATH, 'utf-8');
-      const parsed = JSON.parse(fileData);
-      // Handle legacy format (plain array)
-      if (Array.isArray(parsed)) {
-        return {
-          lastImportId: parsed.length > 0 ? parsed[0].id : null,
-          conversations: parsed
-        };
-      }
-      return parsed;
-    }
-  } catch (err) {
-    console.warn('Error reading bridged cache file:', err);
+let inMemoryCache: BridgeCache = { lastImportId: null, conversations: [] };
+
+function getCacheFilePath(): string {
+  // On Vercel or other serverless lambdas, only /tmp is guaranteed writable
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return path.join('/tmp', 'bridged_cache.json');
   }
-  return { lastImportId: null, conversations: [] };
+  return path.join(process.cwd(), 'src', 'phase1', 'bridged_cache.json');
+}
+
+function readCache(): BridgeCache {
+  // 1. Prefer in-memory if populated
+  if (inMemoryCache.conversations.length > 0) {
+    return inMemoryCache;
+  }
+
+  // 2. Try primary path, then fallback to /tmp
+  const pathsToTry = [
+    getCacheFilePath(),
+    path.join('/tmp', 'bridged_cache.json'),
+    path.join(process.cwd(), 'src', 'phase1', 'bridged_cache.json')
+  ];
+
+  for (const filePath of pathsToTry) {
+    try {
+      if (fs.existsSync(/*turbopackIgnore: true*/ filePath)) {
+        const fileData = fs.readFileSync(/*turbopackIgnore: true*/ filePath, 'utf-8');
+        const parsed = JSON.parse(fileData);
+        const resolved: BridgeCache = Array.isArray(parsed)
+          ? { lastImportId: parsed.length > 0 ? parsed[0].id : null, conversations: parsed }
+          : parsed;
+
+        if (resolved.conversations && resolved.conversations.length > 0) {
+          inMemoryCache = resolved;
+          return resolved;
+        }
+      }
+    } catch (_) {}
+  }
+
+  return inMemoryCache;
 }
 
 function writeCache(cache: BridgeCache) {
-  try {
-    const dir = path.dirname(CACHE_FILE_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+  inMemoryCache = cache;
+
+  const pathsToTry = [
+    getCacheFilePath(),
+    path.join('/tmp', 'bridged_cache.json')
+  ];
+
+  for (const filePath of pathsToTry) {
+    try {
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(filePath, JSON.stringify(cache, null, 2), 'utf-8');
+      break; // Successfully written
+    } catch (_) {
+      // Continue to next fallback path
     }
-    fs.writeFileSync(CACHE_FILE_PATH, JSON.stringify(cache, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('Error writing bridged cache file:', err);
   }
 }
 
